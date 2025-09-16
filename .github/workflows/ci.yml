@@ -19,9 +19,10 @@ jobs:
           docker --version
           docker compose version
 
-      - name: Create CI env file
+      # Create the .env the containers will actually read in CI
+      - name: Create .env for CI
         run: |
-          cat > .env.ci << 'EOF'
+          cat > .env << 'EOF'
           POSTGRES_USER=bella
           POSTGRES_PASSWORD=bella
           POSTGRES_DB=bella
@@ -37,15 +38,14 @@ jobs:
           TWILIO_PHONE_NUMBER=+10000000000
           EOF
 
-      # Override compose just for CI: don't publish DB 5432 (avoid conflicts)
+      # Don’t bind Postgres 5432 in CI (prevents port conflicts on runner)
       - name: Create compose override for CI
         run: |
           cat > docker-compose.ci.yml << 'EOF'
           services:
             db:
-              ports: []         # remove "5432:5432" binding in CI
+              ports: []   # remove "5432:5432" in CI
             api:
-              # ensure API is reachable on localhost:8000 during CI
               ports:
                 - "8000:8000"
           EOF
@@ -55,7 +55,8 @@ jobs:
           COMPOSE_PROJECT_NAME: bella_v3
         run: |
           set -e
-          export $(grep -v '^#' .env.ci | xargs) || true
+          # optional: also export for ${VAR} substitutions
+          export $(grep -v '^#' .env | xargs) || true
           docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
 
       - name: Show docker compose ps
@@ -83,14 +84,12 @@ jobs:
           curl -sSf http://localhost:8000/openapi.json | head -c 300; echo
           curl -s http://localhost:8000/ || true
 
-      # Export logs to files first…
       - name: Export logs to files (always)
         if: always()
         run: |
           docker compose -f docker-compose.yml -f docker-compose.ci.yml logs api > api.log 2>&1 || true
           docker compose -f docker-compose.yml -f docker-compose.ci.yml logs db  > db.log  2>&1 || true
 
-      # …then upload them so we can inspect failures
       - name: Upload logs artifact (always)
         if: always()
         uses: actions/upload-artifact@v4
