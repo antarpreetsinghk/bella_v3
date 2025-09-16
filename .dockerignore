@@ -1,0 +1,56 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+*.log
+
+# ---- Virtual envs ----
+venv/
+env/
+ENV/
+bella_env/
+
+# ---- IDEs ----
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---- OS files ----
+.DS_Store
+Thumbs.db
+
+# ---- Build / cache ----
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.cache/
+
+# ---- Git ----
+.git
+.gitignore
+
+# ---- Docker ----
+Dockerfile*
+docker-compose*.yml
+
+# ---- Database ----
+pgdata/
+*.db
+*.sqlite3
+
+# ---- Env ----
+.env
+.env.*
+!example.env   # keep example env files tracked if you create one
+
+# ---- Alembic ----
+alembic/versions/*.pyc
+alembic/versions/__pycache__/

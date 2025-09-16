@@ -1,0 +1,52 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+*.log
+
+# ---- Virtual envs ----
+venv/
+env/
+ENV/
+bella_env/
+
+# ---- IDEs ----
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---- OS files ----
+.DS_Store
+Thumbs.db
+
+# ---- Build / cache ----
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.cache/
+
+# ---- Docker ----
+# Keep Dockerfile + compose tracked, just ignore build outputs
+.wheels/
+
+# ---- Database ----
+pgdata/
+*.db
+*.sqlite3
+
+# ---- Env ----
+.env
+.env.*
+!example.env   # commit example env templates
+
+# ---- Alembic ----
+alembic/versions/*.pyc
+alembic/versions/__pycache__/
