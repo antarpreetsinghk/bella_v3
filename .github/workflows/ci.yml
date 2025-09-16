@@ -22,41 +22,53 @@ jobs:
       - name: Create CI env file
         run: |
           cat > .env.ci << 'EOF'
-          # --- Required for DB/app startup (dummy but valid-looking) ---
           POSTGRES_USER=bella
           POSTGRES_PASSWORD=bella
           POSTGRES_DB=bella
-
           DATABASE_URL=postgresql+psycopg2://bella:bella@db:5432/bella
 
-          # --- App config ---
           ENV=ci
           SECRET_KEY=not-a-real-secret
           OPENAI_API_KEY=dummy
           MODEL_NAME=gpt-4o-mini
 
-          # --- Twilio (dummy placeholders so imports don't crash) ---
           TWILIO_ACCOUNT_SID=AC00000000000000000000000000000000
           TWILIO_AUTH_TOKEN=000000000000000000000000000000
           TWILIO_PHONE_NUMBER=+10000000000
+          EOF
+
+      # Override compose just for CI: don't publish DB 5432 (avoid conflicts)
+      - name: Create compose override for CI
+        run: |
+          cat > docker-compose.ci.yml << 'EOF'
+          services:
+            db:
+              ports: []         # remove "5432:5432" binding in CI
+            api:
+              # ensure API is reachable on localhost:8000 during CI
+              ports:
+                - "8000:8000"
           EOF
 
       - name: Start stack
         env:
           COMPOSE_PROJECT_NAME: bella_v3
         run: |
-          # Use the same compose file, but point env to our CI file
+          set -e
           export $(grep -v '^#' .env.ci | xargs) || true
-          docker compose up -d --build
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
 
-      - name: Show container list
-        run: docker compose ps
+      - name: Show docker compose ps
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml ps
+
+      - name: Show docker compose config (debug)
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml config
 
       - name: Wait for API to be ready (retry)
         run: |
           set -e
           for i in {1..60}; do
-            if curl -sSf http://localhost:8000/openapi.json >/dev/null; then
+            if curl -sSf http://localhost:8000/openapi.json > /dev/null; then
               echo "API is up!"
               exit 0
             fi
@@ -68,36 +80,34 @@ jobs:
 
       - name: Smoke test
         run: |
-          curl -sSf http://localhost:8000/openapi.json | head -c 200
-          echo
-          # optional: also hit the root and don't fail the build if it 404s
+          curl -sSf http://localhost:8000/openapi.json | head -c 300; echo
           curl -s http://localhost:8000/ || true
 
-      - name: Show logs on failure
-        if: failure()
+      # Export logs to files first…
+      - name: Export logs to files (always)
+        if: always()
         run: |
-          echo "==== API logs ===="
-          docker compose logs api || true
-          echo "==== DB logs ===="
-          docker compose logs db || true
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs api > api.log 2>&1 || true
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs db  > db.log  2>&1 || true
 
+      # …then upload them so we can inspect failures
       - name: Upload logs artifact (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: docker-logs
           path: |
-            # export logs to files first
-            ./api.log
-            ./db.log
-        continue-on-error: true
+            api.log
+            db.log
 
-      - name: Export logs to files (always)
-        if: always()
+      - name: Show logs on failure
+        if: failure()
         run: |
-          docker compose logs api > api.log 2>&1 || true
-          docker compose logs db  > db.log  2>&1 || true
+          echo "==== API logs ===="
+          cat api.log || true
+          echo "==== DB logs ===="
+          cat db.log || true
 
       - name: Tear down
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
