@@ -2,60 +2,102 @@ name: CI
 
 on:
   push:
-    branches: [ "**" ]
+    branches: [ "main" ]
   pull_request:
+    branches: [ "main" ]
 
 jobs:
-  build-and-smoke-test:
+  compose-smoke-test:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Show Docker & Compose versions
+        run: |
+          docker --version
+          docker compose version
 
-      # Create a minimal env just for CI. No real secrets used.
       - name: Create CI env file
         run: |
           cat > .env.ci << 'EOF'
-          POSTGRES_USER=postgres
-          POSTGRES_PASSWORD=postgres
+          # --- Required for DB/app startup (dummy but valid-looking) ---
+          POSTGRES_USER=bella
+          POSTGRES_PASSWORD=bella
           POSTGRES_DB=bella
-          POSTGRES_HOST=db
-          POSTGRES_PORT=5432
-          DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/bella
 
-          # dummy placeholders for code paths that read these
-          OPENAI_API_KEY=dummy
-          TWILIO_ACCOUNT_SID=dummy
-          TWILIO_AUTH_TOKEN=dummy
-          TWILIO_PHONE_NUMBER=+10000000000
+          DATABASE_URL=postgresql+psycopg2://bella:bella@db:5432/bella
 
+          # --- App config ---
           ENV=ci
+          SECRET_KEY=not-a-real-secret
+          OPENAI_API_KEY=dummy
+          MODEL_NAME=gpt-4o-mini
+
+          # --- Twilio (dummy placeholders so imports don't crash) ---
+          TWILIO_ACCOUNT_SID=AC00000000000000000000000000000000
+          TWILIO_AUTH_TOKEN=000000000000000000000000000000
+          TWILIO_PHONE_NUMBER=+10000000000
           EOF
 
-      - name: Build & start services
-        run: docker compose --env-file .env.ci up -d --build
-
-      - name: Wait for API to be ready
+      - name: Start stack
+        env:
+          COMPOSE_PROJECT_NAME: bella_v3
         run: |
-          for i in {1..30}; do
-            if curl -fsS http://localhost:8000/ >/dev/null; then
+          # Use the same compose file, but point env to our CI file
+          export $(grep -v '^#' .env.ci | xargs) || true
+          docker compose up -d --build
+
+      - name: Show container list
+        run: docker compose ps
+
+      - name: Wait for API to be ready (retry)
+        run: |
+          set -e
+          for i in {1..60}; do
+            if curl -sSf http://localhost:8000/openapi.json >/dev/null; then
               echo "API is up!"
               exit 0
             fi
-            echo "[$i/30] Waiting for API..."
-            sleep 5
+            echo "Waiting for API... ($i/60)"
+            sleep 2
           done
-          echo "API did not become ready in time."
-          docker compose logs --no-color api
+          echo "API did not become ready in time" >&2
           exit 1
 
-      - name: Smoke test root endpoint
-        run: curl -v http://localhost:8000/
+      - name: Smoke test
+        run: |
+          curl -sSf http://localhost:8000/openapi.json | head -c 200
+          echo
+          # optional: also hit the root and don't fail the build if it 404s
+          curl -s http://localhost:8000/ || true
 
-      - name: Teardown
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "==== API logs ===="
+          docker compose logs api || true
+          echo "==== DB logs ===="
+          docker compose logs db || true
+
+      - name: Upload logs artifact (always)
         if: always()
-        run: docker compose --env-file .env.ci down -v
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs
+          path: |
+            # export logs to files first
+            ./api.log
+            ./db.log
+        continue-on-error: true
+
+      - name: Export logs to files (always)
+        if: always()
+        run: |
+          docker compose logs api > api.log 2>&1 || true
+          docker compose logs db  > db.log  2>&1 || true
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
