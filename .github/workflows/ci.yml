@@ -1,112 +1,79 @@
-name: CI
+name: compose-smoke-test
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main" ]
 
 jobs:
-  compose-smoke-test:
+  smoke:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Check out
         uses: actions/checkout@v4
 
-      - name: Show Docker & Compose versions
-        run: |
-          docker --version
-          docker compose version
+      - name: Set up Docker Compose
+        uses: docker/setup-buildx-action@v3
 
-      # Create the .env the containers will actually read in CI
-      - name: Create .env for CI
+      - name: Make CI .env (safe, minimal)
         run: |
           cat > .env << 'EOF'
-          POSTGRES_USER=bella
-          POSTGRES_PASSWORD=bella
+          # ---- API ----
+          APP_ENV=ci
+          BELLA_API_KEY=ci-key-not-used
+          LLM_ENABLED=false
+          OPENAI_API_KEY=
+          OPENAI_MODEL=gpt-4o-mini
+
+          # ---- Postgres (compose expects these) ----
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
           POSTGRES_DB=bella
-          DATABASE_URL=postgresql+psycopg2://bella:bella@db:5432/bella
 
-          ENV=ci
-          SECRET_KEY=not-a-real-secret
-          OPENAI_API_KEY=dummy
-          MODEL_NAME=gpt-4o-mini
+          # ---- DB URL used by the API ----
+          DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/bella
 
-          TWILIO_ACCOUNT_SID=AC00000000000000000000000000000000
-          TWILIO_AUTH_TOKEN=000000000000000000000000000000
-          TWILIO_PHONE_NUMBER=+10000000000
+          # ---- Twilio (not used in CI) ----
+          TWILIO_ACCOUNT_SID=
+          TWILIO_AUTH_TOKEN=
+          TWILIO_PHONE_NUMBER=
           EOF
+          echo "Created CI .env:"
+          sed -n '1,12p' .env
 
-      # Don’t bind Postgres 5432 in CI (prevents port conflicts on runner)
-      - name: Create compose override for CI
+      - name: Build containers
+        run: docker compose build
+
+      - name: Start services
+        run: docker compose up -d
+
+      - name: Show logs (early)
         run: |
-          cat > docker-compose.ci.yml << 'EOF'
-          services:
-            db:
-              ports: []   # remove "5432:5432" in CI
-            api:
-              ports:
-                - "8000:8000"
-          EOF
+          sleep 3
+          docker compose ps
+          docker compose logs --no-color --tail=100
 
-      - name: Start stack
-        env:
-          COMPOSE_PROJECT_NAME: bella_v3
+      - name: Wait for API /healthz
         run: |
           set -e
-          # optional: also export for ${VAR} substitutions
-          export $(grep -v '^#' .env | xargs) || true
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
-
-      - name: Show docker compose ps
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml ps
-
-      - name: Show docker compose config (debug)
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml config
-
-      - name: Wait for API to be ready (retry)
-        run: |
-          set -e
-          for i in {1..60}; do
-            if curl -sSf http://localhost:8000/openapi.json > /dev/null; then
-              echo "API is up!"
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/healthz >/dev/null; then
+              echo "API is up"
               exit 0
             fi
             echo "Waiting for API... ($i/60)"
             sleep 2
           done
-          echo "API did not become ready in time" >&2
+          echo "API did not become ready in time"
+          docker compose logs --no-color
           exit 1
 
-      - name: Smoke test
+      - name: Quick smoke tests
         run: |
-          curl -sSf http://localhost:8000/openapi.json | head -c 300; echo
-          curl -s http://localhost:8000/ || true
+          curl -fsS http://localhost:8000/healthz
+          curl -fsS http://localhost:8000/readyz
 
-      - name: Export logs to files (always)
-        if: always()
-        run: |
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs api > api.log 2>&1 || true
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs db  > db.log  2>&1 || true
-
-      - name: Upload logs artifact (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-logs
-          path: |
-            api.log
-            db.log
-
-      - name: Show logs on failure
+      - name: Dump logs on failure
         if: failure()
-        run: |
-          echo "==== API logs ===="
-          cat api.log || true
-          echo "==== DB logs ===="
-          cat db.log || true
-
-      - name: Tear down
-        if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
+        run: docker compose logs --no-color
