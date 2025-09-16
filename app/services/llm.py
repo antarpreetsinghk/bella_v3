@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from typing import Any, Dict, Optional
 
@@ -12,7 +13,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.core.config import settings
 
 
-# ---------- Public contract (what we return to the orchestrator) ----------
+# ---------- Public contract ----------
 
 class ExtractedAppointment(BaseModel):
     full_name: Optional[str] = Field(None, description="Caller name (string)")
@@ -36,22 +37,14 @@ class ExtractedAppointment(BaseModel):
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL | re.IGNORECASE)
 
 def _strip_json_fences(s: str) -> str:
-    """
-    If the model wraps JSON in ```json ...```, strip the fence.
-    """
     m = _JSON_FENCE_RE.match(s.strip())
     return m.group(1) if m else s.strip()
 
-
 def _coerce_json(s: str) -> Dict[str, Any]:
-    """
-    Attempt to coerce a string into JSON. Falls back to {} on failure.
-    """
     s = _strip_json_fences(s)
     try:
         return json.loads(s)
     except Exception:
-        # last-ditch: try to extract the first {...} block
         brace_start = s.find("{")
         brace_end = s.rfind("}")
         if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
@@ -62,11 +55,7 @@ def _coerce_json(s: str) -> Dict[str, Any]:
                 pass
     return {}
 
-
 def _build_messages(transcript: str) -> list[dict[str, str]]:
-    """
-    Compose a minimal, robust prompt that strongly biases toward strict JSON output.
-    """
     SYSTEM = (
         "You are an assistant that extracts dental appointment details from informal speech.\n"
         "Return ONLY a single JSON object with fields:\n"
@@ -88,11 +77,7 @@ def _build_messages(transcript: str) -> list[dict[str, str]]:
         {"role": "user", "content": USER},
     ]
 
-
 def _openai_base_url() -> str:
-    """
-    Allow overriding the base URL (useful for proxies/self-hosted gateways).
-    """
     return (settings.OPENAI_BASE_URL or "https://api.openai.com").rstrip("/")
 
 
@@ -101,24 +86,37 @@ def _openai_base_url() -> str:
 async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
     """
     Single entrypoint for LLM extraction.
-    - Enforces JSON-only via response_format
-    - Retries once if the model returns non-JSON
-    - Validates into ExtractedAppointment
+
+    Behavior:
+      - If LLM_ENABLED=false (env), returns a safe placeholder (good for CI).
+      - If enabled and OPENAI_API_KEY missing -> raises with a clear error.
+      - Otherwise calls OpenAI and validates output.
     """
     if not transcript or not transcript.strip():
         raise ValueError("Transcript is empty.")
+
+    # LLM toggle (env can be "true"/"false"/"1"/"0")
+    llm_enabled = str(os.getenv("LLM_ENABLED", "true")).lower() in {"1", "true", "yes", "on"}
+    if not llm_enabled:
+        # Safe CI/dev fallback: no network, no key needed
+        return ExtractedAppointment(
+            full_name=None,
+            mobile=None,
+            starts_at=None,
+            duration_min=30,
+            notes="[LLM disabled]",
+            missing=["full_name", "mobile", "starts_at"],
+            confidence=None,
+        )
 
     base_url = _openai_base_url()
     model = getattr(settings, "OPENAI_MODEL", None) or "gpt-4o-mini"
     api_key = getattr(settings, "OPENAI_API_KEY", None)
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not set.")
+        raise RuntimeError("OPENAI_API_KEY is not set but LLM is enabled. Set LLM_ENABLED=false to disable in CI.")
 
-    # Safety bounds; fallbacks if not present in settings
-    max_input_tokens = int(getattr(settings, "REQUEST_MAX_TOKENS", 4000))
     max_output_tokens = int(getattr(settings, "RESPONSE_MAX_TOKENS", 512))
 
-    # Build payload for Chat Completions with JSON mode
     payload = {
         "model": model,
         "messages": _build_messages(transcript),
@@ -133,26 +131,21 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
     }
 
     async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
-        # Primary attempt
         resp = await client.post("/v1/chat/completions", headers=headers, json=payload)
         resp.raise_for_status()
         data = resp.json()
         text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
         obj = _coerce_json(text)
 
-        # If empty/non-JSON sneaks through, do one guarded retry without response_format
         if not obj:
-            retry_payload = {
-                **payload,
-                "response_format": None,  # remove hard JSON mode
-            }
+            retry_payload = {**payload}
+            retry_payload.pop("response_format", None)
             resp2 = await client.post("/v1/chat/completions", headers=headers, json=retry_payload)
             resp2.raise_for_status()
             data2 = resp2.json()
             text2 = (data2.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
             obj = _coerce_json(text2)
 
-    # Ensure required keys exist even if model omitted them
     obj.setdefault("full_name", None)
     obj.setdefault("mobile", None)
     obj.setdefault("starts_at", None)
@@ -161,12 +154,9 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
     obj.setdefault("missing", [])
     obj.setdefault("confidence", None)
 
-    # Final validation into our dataclass
     try:
         parsed = ExtractedAppointment(**obj)
     except ValidationError as ve:
-        # If model produced junk types, degrade gracefully but surface something usable
-        # Attempt a minimal salvage by stripping extraneous keys then re-validating
         minimal = {
             "full_name": obj.get("full_name"),
             "mobile": obj.get("mobile"),
@@ -179,7 +169,6 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
         try:
             parsed = ExtractedAppointment(**minimal)
         except Exception as inner:
-            # Surface a concise error; the orchestrator can decide to ask a follow-up question
             raise RuntimeError(f"LLM extraction validation failed: {ve}") from inner
 
     return parsed
@@ -188,7 +177,6 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
 # ---------- Simple CLI for local dev (optional) ----------
 
 if __name__ == "__main__":
-    # Quick manual test:
     example = (
         "Hey, this is John Smith. I'd like to book next Tuesday at 10 in the morning. "
         "My number is 587 555 0199. Make it a regular 30 minute cleaning."
