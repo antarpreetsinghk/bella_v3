@@ -45,7 +45,7 @@ pgdata/
 # ---- Env ----
 .env
 .env.*
-!example.env   # commit example env templates
+!*.example     # allow .env.example or config.example to be tracked
 
 # ---- Alembic ----
 alembic/versions/*.pyc
