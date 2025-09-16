@@ -45,7 +45,7 @@ pgdata/
 # ---- Env ----
 .env
 .env.*
-!*.example     # allow .env.example or config.example to be tracked
+!*.example      # unignore any *.example files (e.g. .env.example)
 
 # ---- Alembic ----
 alembic/versions/*.pyc
