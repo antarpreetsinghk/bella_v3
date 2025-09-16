@@ -1,37 +1,79 @@
-name: compose-smoke-test
+name: CI
 
 on:
   push:
     branches: [ main ]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  smoke:
+  unit-tests:
+    name: Unit tests (skip if none)
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Set up Docker Compose
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (best-effort)
+        run: |
+          python -m pip install --upgrade pip
+          # Your app deps (ignore if requirements.txt lacks dev deps)
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt || true
+          fi
+          # Minimal test tooling
+          pip install pytest pytest-cov requests httpx
+
+      - name: Run pytest if tests/ exists
+        run: |
+          set -e
+          if [ -d tests ] && compgen -G "tests/test_*.py" > /dev/null; then
+            echo "Found tests/, running pytest..."
+            pytest -q --maxfail=1
+          else
+            echo "No tests detected, skipping pytest."
+          fi
+
+  compose-smoke:
+    name: Docker Compose smoke test
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Make CI .env (safe, minimal)
+      - name: Create CI .env (safe, minimal)
         run: |
           cat > .env << 'EOF'
-          # ---- API ----
+          # ---- App ----
           APP_ENV=ci
-          BELLA_API_KEY=ci-key-not-used
           LLM_ENABLED=false
+          BELLA_API_KEY=ci-key-not-used
+
+          # ---- OpenAI (disabled in CI) ----
           OPENAI_API_KEY=
           OPENAI_MODEL=gpt-4o-mini
+          OPENAI_BASE_URL=
 
-          # ---- Postgres (compose expects these) ----
+          # ---- Postgres (compose) ----
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=postgres
           POSTGRES_DB=bella
 
-          # ---- DB URL used by the API ----
+          # ---- DB URL for API ----
           DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/bella
 
           # ---- Twilio (not used in CI) ----
@@ -39,8 +81,7 @@ jobs:
           TWILIO_AUTH_TOKEN=
           TWILIO_PHONE_NUMBER=
           EOF
-          echo "Created CI .env:"
-          sed -n '1,12p' .env
+          echo "Wrote CI .env"
 
       - name: Build containers
         run: docker compose build
@@ -48,11 +89,11 @@ jobs:
       - name: Start services
         run: docker compose up -d
 
-      - name: Show logs (early)
+      - name: Early logs & ps
         run: |
           sleep 3
           docker compose ps
-          docker compose logs --no-color --tail=100
+          docker compose logs --no-color --tail=100 || true
 
       - name: Wait for API /healthz
         run: |
@@ -69,11 +110,17 @@ jobs:
           docker compose logs --no-color
           exit 1
 
-      - name: Quick smoke tests
+      - name: Quick smoke checks
         run: |
-          curl -fsS http://localhost:8000/healthz
-          curl -fsS http://localhost:8000/readyz
+          curl -fsS http://localhost:8000/healthz | tee /tmp/healthz.json
+          curl -fsS http://localhost:8000/readyz | tee /tmp/readyz.json
 
-      - name: Dump logs on failure
+      - name: Upload logs on failure
         if: failure()
-        run: docker compose logs --no-color
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs
+          path: |
+            /tmp/healthz.json
+            /tmp/readyz.json
+          if-no-files-found: warn
