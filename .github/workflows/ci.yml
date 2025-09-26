@@ -124,3 +124,71 @@ jobs:
             /tmp/healthz.json
             /tmp/readyz.json
           if-no-files-found: warn
+
+  deploy-aws:
+    name: Deploy to AWS ECS
+    runs-on: ubuntu-latest
+    needs: compose-smoke
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ca-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bella-v3
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Update task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: aws/task-definition.json
+          container-name: bella-api
+          image: ${{ steps.login-ecr.outputs.registry }}/bella-v3:${{ github.sha }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: bella-prod-service
+          cluster: bella-prod-cluster
+          wait-for-service-stability: true
+
+      - name: Validate deployment
+        run: |
+          echo "Waiting for deployment to stabilize..."
+          sleep 60
+
+          # Test health endpoint
+          for i in $(seq 1 30); do
+            if curl -fsS http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/healthz >/dev/null; then
+              echo "✅ Health check passed"
+              break
+            fi
+            echo "⏳ Waiting for health check... ($i/30)"
+            sleep 10
+          done
+
+          # Test webhook endpoint
+          echo "🔗 Testing Twilio webhook..."
+          python3 debug_twilio.py

@@ -14,8 +14,8 @@ import app.db.base  # <-- important: imports your models to populate Base.metada
 
 # Alembic Config object, provides access to .ini values
 config = context.config
-# Inject our sync DB URL from settings
-config.set_main_option("sqlalchemy.url", settings.sync_db_uri)
+# Inject our sync DB URL from settings (bypass ConfigParser interpolation issue)
+# We'll set it directly in the run_migrations functions instead of using set_main_option
 
 # Setup Python logging via alembic.ini if present
 if config.config_file_name is not None:

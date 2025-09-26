@@ -1,0 +1,99 @@
+{
+  "family": "bella-prod",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::291878986264:role/bella-ecs-execution-role",
+  "taskRoleArn": "arn:aws:iam::291878986264:role/bella-ecs-task-role",
+  "containerDefinitions": [
+    {
+      "name": "bella-api",
+      "image": "291878986264.dkr.ecr.ca-central-1.amazonaws.com/bella-v3:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:OPENAI_API_KEY::"
+        },
+        {
+          "name": "OPENAI_MODEL",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:OPENAI_MODEL::"
+        },
+        {
+          "name": "REQUEST_MAX_TOKENS",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:REQUEST_MAX_TOKENS::"
+        },
+        {
+          "name": "RESPONSE_MAX_TOKENS",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:RESPONSE_MAX_TOKENS::"
+        },
+        {
+          "name": "POSTGRES_HOST",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_HOST::"
+        },
+        {
+          "name": "POSTGRES_PORT",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_PORT::"
+        },
+        {
+          "name": "POSTGRES_DB",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_DB::"
+        },
+        {
+          "name": "POSTGRES_USER",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_USER::"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_PASSWORD::"
+        },
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:DATABASE_URL::"
+        },
+        {
+          "name": "BELLA_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:BELLA_API_KEY::"
+        },
+        {
+          "name": "ADMIN_USER",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:ADMIN_USER::"
+        },
+        {
+          "name": "ADMIN_PASS",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:ADMIN_PASS::"
+        },
+        {
+          "name": "CSRF_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:CSRF_SECRET::"
+        },
+        {
+          "name": "TWILIO_AUTH_TOKEN",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:TWILIO_AUTH_TOKEN::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/bella-prod",
+          "awslogs-region": "ca-central-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/healthz || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}
