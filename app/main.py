@@ -108,11 +108,34 @@ async def lock_all(request, call_next):
                 logger.info(f"Body size: {len(body_bytes)} bytes")
                 logger.info(f"Form data: {form}")
 
-                # Detailed signature validation
-                url_for_validation = str(request.url)
-                logger.info(f"URL for validation: {url_for_validation}")
+                # Detailed signature validation - try multiple URL formats
+                received_url = str(request.url)
+                logger.info(f"Received URL: {received_url}")
 
-                ok = RequestValidator(TWILIO_AUTH_TOKEN).validate(url_for_validation, form, sig)
+                # Try different URL schemes that Twilio might have used
+                possible_urls = [
+                    received_url,  # Original
+                    received_url.replace("http://", "https://"),  # HTTPS version
+                    "https://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/twilio/voice",  # Direct HTTPS
+                    "https://bella-alb-1924818779.ca-central-1.elb.amazonaws.com:443/twilio/voice",  # With port
+                ]
+
+                ok = False
+                url_for_validation = received_url
+
+                for test_url in possible_urls:
+                    logger.info(f"Testing URL: {test_url}")
+                    test_result = RequestValidator(TWILIO_AUTH_TOKEN).validate(test_url, form, sig)
+                    logger.info(f"Validation result for {test_url}: {test_result}")
+
+                    if test_result:
+                        ok = True
+                        url_for_validation = test_url
+                        logger.info(f"✅ SIGNATURE VALIDATED with URL: {test_url}")
+                        break
+
+                if not ok:
+                    logger.warning(f"❌ ALL URL validation attempts failed. Tried: {possible_urls}")
                 logger.info(f"Signature validation result: {ok}")
 
                 # Additional debug logging if webhook capture is enabled
