@@ -64,19 +64,30 @@ async def lock_all(request, call_next):
 
     # 1) Twilio webhook signature verify (reject spoofed hits)
     if path.startswith("/twilio/"):
+        logger.info(f"Twilio webhook request to: {path}")
+        logger.info(f"TWILIO_AUTH_TOKEN present: {bool(TWILIO_AUTH_TOKEN)}")
+
         if TWILIO_AUTH_TOKEN:
             try:
                 body_bytes = await request.body()  # Starlette caches; downstream can still read
                 form = dict(parse_qsl(body_bytes.decode(errors="ignore")))
                 sig = request.headers.get("X-Twilio-Signature", "")
+
+                logger.info(f"X-Twilio-Signature present: {bool(sig)}")
+                logger.info(f"Form data keys: {list(form.keys())}")
+
                 ok = RequestValidator(TWILIO_AUTH_TOKEN).validate(str(request.url), form, sig)
+                logger.info(f"Signature validation result: {ok}")
+
                 if not ok:
+                    logger.warning("Signature validation failed - rejecting call")
                     return FastResponse(
                         content='<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>',
                         media_type="application/xml",
                         status_code=403,
                     )
-            except Exception:
+            except Exception as e:
+                logger.error(f"Signature validation exception: {e}")
                 return FastResponse(
                     content='<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>',
                     media_type="application/xml",
