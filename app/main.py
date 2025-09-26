@@ -5,11 +5,15 @@ from __future__ import annotations
 from dotenv import load_dotenv
 load_dotenv()
 
+import logging
 import os
 import secrets
 from urllib.parse import parse_qsl
 
 import sqlalchemy as sa
+
+# Set up logger
+logger = logging.getLogger(__name__)
 from fastapi import FastAPI, Depends
 from fastapi.responses import JSONResponse, Response as FastResponse
 from sqlalchemy.ext.asyncio import AsyncSession
