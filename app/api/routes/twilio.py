@@ -67,20 +67,70 @@ def _gather_block(prompt: str) -> str:
 
 
 def _extract_digits(s: str) -> str:
-    return re.sub(r"\D+", "", s or "")
+    """Extract digits from string, handling both numeric and word formats."""
+    if not s:
+        return ""
+
+    # First try direct digit extraction
+    digits = re.sub(r"\D+", "", s)
+    if digits:
+        return digits
+
+    # Handle word-to-digit conversion for speech-to-text
+    word_to_digit = {
+        "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+        "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+        "oh": "0"  # Common speech pattern for zero
+    }
+
+    words = s.lower().split()
+    digit_result = ""
+    for word in words:
+        if word in word_to_digit:
+            digit_result += word_to_digit[word]
+        elif word.isdigit():
+            digit_result += word
+
+    logger.info("[extract_digits] input='%s' -> digits='%s'", s, digit_result)
+    return digit_result
 
 
 def _normalize_phone_for_ca_us(raw: str) -> str | None:
+    """Normalize phone number from speech to E.164 format."""
     raw = (raw or "").strip()
+
+    # Extract all digits from speech input (handles "eight six nine..." format)
     digits = _extract_digits(raw)
+
+    logger.info("[phone_normalize] raw='%s' digits='%s'", raw, digits)
+
+    # Handle 10-digit North American numbers
     if len(digits) == 10:
-        return "+1" + digits
+        result = "+1" + digits
+        logger.info("[phone_normalize] 10-digit -> %s", result)
+        return result
+
+    # Handle 11-digit with leading 1
+    if len(digits) == 11 and digits.startswith("1"):
+        result = "+" + digits
+        logger.info("[phone_normalize] 11-digit -> %s", result)
+        return result
+
+    # Handle already formatted international numbers
     if raw.startswith("+"):
         d = raw[1:]
         if d.isdigit() and 7 <= len(d) <= 15:
+            logger.info("[phone_normalize] international -> %s", raw)
             return raw
+
+    # Handle other valid digit lengths (7-15) - assume North American
     if digits.isdigit() and 7 <= len(digits) <= 15:
-        return digits
+        if len(digits) >= 10:
+            result = "+1" + digits
+            logger.info("[phone_normalize] long-digits -> %s", result)
+            return result
+
+    logger.warning("[phone_normalize] failed to normalize: raw='%s' digits='%s'", raw, digits)
     return None
 
 
@@ -187,12 +237,16 @@ async def voice_collect(
 </Response>""")
 
     if sess.step == "ask_mobile":
+        logger.info("[ask_mobile] processing speech: '%s'", speech)
         norm = _normalize_phone_for_ca_us(speech)
         if not norm:
+            logger.warning("[ask_mobile] normalization failed for: '%s'", speech)
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Sorry, I didn’t get the number. Could you please say your phone number, digit by digit?")}
+{_gather_block("Sorry, I didn't get the number. Could you please say your phone number, digit by digit?")}
 </Response>""")
+
+        logger.info("[ask_mobile] normalized '%s' -> '%s', advancing to ask_time", speech, norm)
         sess.data["mobile"] = norm
         sess.step = "ask_time"
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
