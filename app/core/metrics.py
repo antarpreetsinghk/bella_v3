@@ -154,8 +154,9 @@ def track_performance(func: Callable) -> Callable:
             duration = time.time() - start_time
             metrics_collector.track_request(endpoint, duration, success)
 
-    # Return appropriate wrapper based on function type
-    if hasattr(func, '__code__') and 'await' in str(func.__code__):
+    # Simplified: just return async wrapper for async functions
+    import inspect
+    if inspect.iscoroutinefunction(func):
         return async_wrapper
     else:
         return sync_wrapper

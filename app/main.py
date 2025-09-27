@@ -46,21 +46,23 @@ from app.api.routes.home import router as home_router  # dashboard (Basic Auth +
 
 app = FastAPI(title="Bella V3", description="AI-powered appointment booking system")
 
-# Add logging middleware
-logging_middleware = LoggingMiddleware(
-    log_requests=debug_mode,
-    log_responses=debug_mode
-)
-app.middleware("http")(logging_middleware)
+# Add logging middleware with error handling
+try:
+    logging_middleware = LoggingMiddleware(
+        log_requests=debug_mode,
+        log_responses=debug_mode
+    )
+    app.middleware("http")(logging_middleware)
+except Exception as e:
+    # Fallback if logging middleware fails
+    logger.warning(f"Logging middleware failed to initialize: {e}")
 
 # -------- Health / readiness (public) --------
 @app.get("/healthz", include_in_schema=False)
-@track_performance
 async def healthz():
     return {"ok": True}
 
 @app.get("/metrics", include_in_schema=False)
-@track_performance
 async def metrics():
     """Internal metrics endpoint for monitoring."""
     try:
