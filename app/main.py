@@ -12,12 +12,15 @@ from urllib.parse import parse_qsl
 
 import sqlalchemy as sa
 
-# Set up enhanced logger for debugging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Initialize structured logging and monitoring
+from app.core.logging import setup_logging, LoggingMiddleware, get_logger
+from app.core.errors import log_error, ErrorSeverity, error_aggregator
+from app.core.metrics import metrics_collector, track_performance, get_performance_metrics
+
+# Set up structured logging
+debug_mode = os.getenv("APP_ENV", "production") == "development"
+setup_logging(debug=debug_mode, max_log_length=200)
+logger = get_logger(__name__)
 
 # Import webhook capture utility
 try:
@@ -27,7 +30,7 @@ try:
 except ImportError:
     WEBHOOK_DEBUG_ENABLED = False
     logger.info("Webhook debugging disabled (capture_webhook_details not found)")
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.responses import JSONResponse, Response as FastResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from twilio.request_validator import RequestValidator
@@ -41,12 +44,38 @@ from app.api.routes.assistant import router as assistant_router
 from app.api.routes.twilio import router as twilio_router
 from app.api.routes.home import router as home_router  # dashboard (Basic Auth + CSRF live there)
 
-app = FastAPI()
+app = FastAPI(title="Bella V3", description="AI-powered appointment booking system")
+
+# Add logging middleware
+logging_middleware = LoggingMiddleware(
+    log_requests=debug_mode,
+    log_responses=debug_mode
+)
+app.middleware("http")(logging_middleware)
 
 # -------- Health / readiness (public) --------
 @app.get("/healthz", include_in_schema=False)
+@track_performance
 async def healthz():
     return {"ok": True}
+
+@app.get("/metrics", include_in_schema=False)
+@track_performance
+async def metrics():
+    """Internal metrics endpoint for monitoring."""
+    try:
+        performance_metrics = get_performance_metrics()
+        error_summary = error_aggregator.get_error_summary()
+
+        return {
+            "status": "healthy",
+            "performance": performance_metrics,
+            "errors": error_summary,
+            "timestamp": __import__('time').time()
+        }
+    except Exception as e:
+        log_error(e, {"endpoint": "/metrics"}, ErrorSeverity.MEDIUM)
+        return {"status": "error", "message": "Metrics collection failed"}
 
 @app.get("/readyz", include_in_schema=False)
 async def readyz(db: AsyncSession = Depends(get_session)):
@@ -56,6 +85,9 @@ async def readyz(db: AsyncSession = Depends(get_session)):
 # -------- Global security gate (single place) --------
 BELLA_API_KEY = os.getenv("BELLA_API_KEY", "")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+APP_ENV = os.getenv("APP_ENV", "production")
+TEST_MODE = APP_ENV.lower() in ("test", "testing", "development")
 
 # Public paths (do NOT require X-API-Key here)
 PUBLIC_EXACT = {
@@ -81,11 +113,9 @@ async def lock_all(request, call_next):
 
     # 1) Twilio webhook signature verify (reject spoofed hits)
     if path.startswith("/twilio/"):
-        logger.info(f"=== TWILIO WEBHOOK REQUEST ===")
-        logger.info(f"Path: {path}")
-        logger.info(f"Full URL: {str(request.url)}")
-        logger.info(f"Method: {request.method}")
-        logger.info(f"TWILIO_AUTH_TOKEN present: {bool(TWILIO_AUTH_TOKEN)}")
+        logger.info("twilio_webhook_start",
+                   path=path, method=request.method,
+                   has_auth_token=bool(TWILIO_AUTH_TOKEN))
 
         # Capture detailed request information if debugging enabled
         body_bytes = await request.body()  # Starlette caches; downstream can still read
@@ -94,23 +124,23 @@ async def lock_all(request, call_next):
             try:
                 webhook_capture.capture_request_details(request, body_bytes)
             except Exception as debug_e:
-                logger.error(f"Debug capture failed: {debug_e}")
+                log_error(debug_e, {"component": "webhook_debug"}, ErrorSeverity.LOW)
 
-        if TWILIO_AUTH_TOKEN:
+        if TWILIO_AUTH_TOKEN and not TEST_MODE:
             try:
                 form = dict(parse_qsl(body_bytes.decode(errors="ignore")))
                 sig = request.headers.get("X-Twilio-Signature", "")
 
-                logger.info(f"Request headers count: {len(request.headers)}")
-                logger.info(f"X-Twilio-Signature: {sig}")
-                logger.info(f"Content-Type: {request.headers.get('content-type', 'NOT_SET')}")
-                logger.info(f"User-Agent: {request.headers.get('user-agent', 'NOT_SET')}")
-                logger.info(f"Body size: {len(body_bytes)} bytes")
-                logger.info(f"Form data: {form}")
+                logger.info("twilio_request_details",
+                           headers_count=len(request.headers),
+                           signature_present=bool(sig),
+                           content_type=request.headers.get('content-type'),
+                           body_size=len(body_bytes),
+                           form_keys=list(form.keys()) if form else [])
 
                 # Detailed signature validation - try multiple URL formats
                 received_url = str(request.url)
-                logger.info(f"Received URL: {received_url}")
+                logger.info("signature_validation_start", url=received_url)
 
                 # Try different URL schemes that Twilio might have used
                 possible_urls = [
@@ -123,20 +153,21 @@ async def lock_all(request, call_next):
                 ok = False
                 url_for_validation = received_url
 
-                for test_url in possible_urls:
-                    logger.info(f"Testing URL: {test_url}")
+                for i, test_url in enumerate(possible_urls):
                     test_result = RequestValidator(TWILIO_AUTH_TOKEN).validate(test_url, form, sig)
-                    logger.info(f"Validation result for {test_url}: {test_result}")
 
                     if test_result:
                         ok = True
                         url_for_validation = test_url
-                        logger.info(f"✅ SIGNATURE VALIDATED with URL: {test_url}")
+                        logger.info("signature_validated", url=test_url, attempt=i+1)
                         break
 
                 if not ok:
-                    logger.warning(f"❌ ALL URL validation attempts failed. Tried: {possible_urls}")
-                logger.info(f"Signature validation result: {ok}")
+                    logger.warning("signature_validation_failed",
+                                 attempted_urls=len(possible_urls))
+                    log_error(Exception("Twilio signature validation failed"),
+                             {"endpoint": path, "attempts": len(possible_urls)},
+                             ErrorSeverity.MEDIUM)
 
                 # Additional debug logging if webhook capture is enabled
                 if WEBHOOK_DEBUG_ENABLED:
@@ -159,31 +190,31 @@ async def lock_all(request, call_next):
                         logger.error(f"Debug logging failed: {debug_e}")
 
                 if not ok:
-                    logger.warning("=== SIGNATURE VALIDATION FAILED ===")
-                    logger.warning("Rejecting webhook call due to invalid signature")
+                    logger.warning("webhook_rejected", reason="invalid_signature")
                     return FastResponse(
                         content='<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>',
                         media_type="application/xml",
                         status_code=403,
                     )
                 else:
-                    logger.info("=== SIGNATURE VALIDATION PASSED ===")
+                    logger.info("webhook_accepted", validation_url=url_for_validation)
 
             except Exception as e:
-                logger.error(f"=== SIGNATURE VALIDATION EXCEPTION ===")
-                logger.error(f"Exception: {str(e)}")
-                logger.error(f"Exception type: {type(e).__name__}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
+                log_error(e, {"endpoint": path, "component": "signature_validation"},
+                         ErrorSeverity.HIGH)
                 return FastResponse(
                     content='<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>',
                     media_type="application/xml",
                     status_code=403,
                 )
         else:
-            logger.warning("No TWILIO_AUTH_TOKEN configured - allowing request through")
+            if TEST_MODE:
+                logger.info("twilio_test_mode", auth_disabled=True)
+            else:
+                logger.warning("twilio_auth_disabled",
+                              reason="no_auth_token")
 
-        logger.info("=== PROCEEDING TO TWILIO ROUTER ===")
+        logger.info("proceeding_to_twilio_router")
         # Allow Twilio routes through (they're public but signature-checked)
         return await call_next(request)
 
@@ -194,6 +225,9 @@ async def lock_all(request, call_next):
     # 3) Everything else → require API key header
     api_key = request.headers.get("X-API-Key", "")
     if not BELLA_API_KEY or not secrets.compare_digest(api_key, BELLA_API_KEY):
+        log_error(Exception("API key validation failed"),
+                 {"endpoint": path, "has_key": bool(api_key)},
+                 ErrorSeverity.MEDIUM)
         return JSONResponse({"detail": "Invalid or missing API key"}, status_code=401)
 
     return await call_next(request)
