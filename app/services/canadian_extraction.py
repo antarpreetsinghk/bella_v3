@@ -145,6 +145,31 @@ async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[date
     speech = speech.strip()
     logger.info("[time_canadian] processing: '%s'", speech)
 
+    # Preprocessing: Handle problematic phrase patterns
+    original_speech = speech
+    speech_lower = speech.lower()
+
+    # Pattern 1: "Next week. Thursday at 9:30 a.m." -> "next Thursday at 9:30 a.m."
+    if speech_lower.startswith("next week."):
+        cleaned = speech[10:].strip()  # Remove "Next week."
+        if cleaned:
+            speech = f"next {cleaned}"
+
+    # Pattern 2: "This week. Friday at 2 p.m." -> "this Friday at 2 p.m."
+    elif speech_lower.startswith("this week."):
+        cleaned = speech[10:].strip()  # Remove "This week."
+        if cleaned:
+            speech = f"this {cleaned}"
+
+    # Pattern 3: "Tomorrow. At 3 p.m." -> "tomorrow at 3 p.m."
+    elif speech_lower.startswith("tomorrow."):
+        cleaned = speech[9:].strip()  # Remove "Tomorrow."
+        if cleaned:
+            speech = f"tomorrow {cleaned}"
+
+    if speech != original_speech:
+        logger.debug("[time_canadian] preprocessed: '%s' -> '%s'", original_speech, speech)
+
     # Layer 1: parsedatetime (excellent for Canadian English)
     try:
         cal = parsedatetime.Calendar()
@@ -152,9 +177,9 @@ async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[date
         if parse_status:
             # Convert to datetime and assume local timezone
             dt = datetime(*time_struct[:6])
-            # Assume Canada/Eastern for now (can be configurable)
+            # Use Edmonton timezone to match business hours
             from zoneinfo import ZoneInfo
-            local_dt = dt.replace(tzinfo=ZoneInfo("America/Toronto"))
+            local_dt = dt.replace(tzinfo=ZoneInfo("America/Edmonton"))
             result = local_dt.astimezone(timezone.utc)
             logger.info("[time_canadian] parsedatetime success: '%s' -> %s", speech, result)
             return result
@@ -167,7 +192,7 @@ async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[date
         dt = parser.parse(speech, fuzzy=True)
         if dt.tzinfo is None:
             from zoneinfo import ZoneInfo
-            dt = dt.replace(tzinfo=ZoneInfo("America/Toronto"))
+            dt = dt.replace(tzinfo=ZoneInfo("America/Edmonton"))
         result = dt.astimezone(timezone.utc)
         logger.info("[time_canadian] dateutil success: '%s' -> %s", speech, result)
         return result
@@ -209,8 +234,10 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
 
     # Fast pattern matching for Canadian name patterns (no heavy dependencies)
     patterns = [
-        r"(?:my name is|i'm|this is|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
-        r"(?:my name is|i'm|this is|i am)\s+([a-z]+(?:\s+[a-z]+)+)",  # lowercase
+        r"(?:my (?:full )?name is|i'm|this is|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+        r"(?:my (?:full )?name is|i'm|this is|i am)\s+([a-z]+(?:\s+[a-z]+)+)",  # lowercase
+        r"(?:my (?:full )?name is|i'm|this is|i am)\s+([A-Z][a-z]+,?\s+[A-Z][a-z]+)",  # Handle comma
+        r"(?:my (?:full )?name is|i'm|this is|i am)\s+([a-z]+,?\s+[a-z]+)",  # Handle comma lowercase
         r"^([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+calling|$|\s*$)",
         r"^([a-z]+\s+[a-z]+)(?:\s+calling|$|\s*$)",  # lowercase
         r"([A-Z][a-z]+\s+[A-Z][a-z]+)",  # Simple pattern
@@ -221,7 +248,7 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
         try:
             match = re.search(pattern, speech, re.IGNORECASE)
             if match:
-                candidate = match.group(1).strip().title()
+                candidate = match.group(1).strip().replace(',', '').title()  # Remove commas
                 # Simple validation - must have at least 2 words with 2+ chars each
                 words = candidate.split()
                 if len(words) >= 2 and all(len(w) >= 2 for w in words):

@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 LOCAL_TZ = ZoneInfo("America/Edmonton")
 
+# Business hours: Monday to Friday 9:00 AM to 5:00 PM (Edmonton time)
 # 0=Mon .. 6=Sun
 BUSINESS_HOURS = {
     0: (time(9, 0), time(17, 0)),  # Mon
@@ -12,7 +13,7 @@ BUSINESS_HOURS = {
     2: (time(9, 0), time(17, 0)),  # Wed
     3: (time(9, 0), time(17, 0)),  # Thu
     4: (time(9, 0), time(17, 0)),  # Fri
-    5: (time(9, 0), time(14, 0)),  # Sat (short)
+    5: None,                       # Sat (closed)
     6: None,                       # Sun (closed)
 }
 
