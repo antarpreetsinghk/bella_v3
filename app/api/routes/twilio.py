@@ -13,6 +13,13 @@ from zoneinfo import ZoneInfo
 import phonenumbers
 from phonenumbers import PhoneNumberFormat
 
+# Canadian-optimized extraction
+from app.services.canadian_extraction import (
+    extract_canadian_phone,
+    extract_canadian_time,
+    extract_canadian_name
+)
+
 from app.db.session import get_session
 from app.services.session import get_session as get_call_session, reset_session
 from app.services.llm import extract_appointment_fields
@@ -53,8 +60,8 @@ def _mask_phone(s: str | None) -> str:
 
 def _gather_block(prompt: str) -> str:
     """
-    Reusable <Gather> that posts back to this collector.
-    actionOnEmptyResult=true ensures Twilio still hits /collect if it heard nothing.
+    Canadian-optimized speech gathering with enhanced Twilio settings.
+    Enhanced=true improves accuracy for Canadian English accents.
     """
     return f"""
   <Gather input="speech"
@@ -62,10 +69,12 @@ def _gather_block(prompt: str) -> str:
           method="POST"
           action="/twilio/voice/collect"
           actionOnEmptyResult="true"
-          speechTimeout="auto">
-    <Say>{prompt}</Say>
+          speechTimeout="3"
+          timeout="6"
+          enhanced="true">
+    <Say voice="alice" language="en-CA">{prompt}</Say>
   </Gather>
-  <Say>Sorry, I didn’t catch that.</Say>
+  <Say voice="alice" language="en-CA">Sorry, I didn't catch that.</Say>
   <Redirect method="POST">/twilio/voice</Redirect>
 """
 
@@ -177,7 +186,7 @@ async def voice_entry(CallSid: str = Form(default="")) -> Response:
     reset_session(CallSid)  # fresh start
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Hello and welcome. Thank you for calling. I’ll help you book your appointment. To start, could you please tell me your full name?")}
+{_gather_block("Hi there! Thanks for calling. I'll help you book your appointment today. What's your name?")}
 </Response>"""
     logger.info("[voice] start call=%s", CallSid)
     return _twiml(twiml)
@@ -236,48 +245,65 @@ async def voice_collect(
 
     # --- Step machine ---
     if sess.step == "ask_name":
-        # Use extracted name if available, otherwise treat speech as name
-        if extracted_info.get("name"):
-            sess.data["full_name"] = " ".join(extracted_info["name"].split())
-            logger.info("[ask_name] used extracted name: '%s'", extracted_info["name"])
-        else:
-            sess.data["full_name"] = " ".join(speech.split())
-            logger.info("[ask_name] used speech as name: '%s'", speech)
+        # CANADIAN OPTIMIZED: Try fast name extraction with LLM fallback
+        async def llm_name_fallback(text):
+            try:
+                ex = await extract_appointment_fields(text)
+                return ex.full_name
+            except:
+                return None
+
+        extracted_name = extract_canadian_name(speech, llm_name_fallback)
+
+        # Also try LLM extracted name from earlier if direct extraction failed
+        if not extracted_name and extracted_info.get("name"):
+            extracted_name = extract_canadian_name(extracted_info["name"])
+
+        # Fallback to treating entire speech as name if extraction fails
+        sess.data["full_name"] = extracted_name or " ".join(speech.split())
+        logger.info("[ask_name] final name: '%s' (from speech: '%s')", sess.data["full_name"], speech)
 
         # Check if we also got mobile number
         if extracted_info.get("mobile"):
-            norm = _extract_phone_fast(extracted_info["mobile"])
+            norm = extract_canadian_phone(extracted_info["mobile"])
             if norm:
                 sess.data["mobile"] = norm
                 sess.step = "ask_time"
                 logger.info("[ask_name] also got mobile '%s' -> '%s', jumping to ask_time", extracted_info["mobile"], norm)
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Great! What date and time would you like? For example, Tuesday at 11 AM, or September 12 at 3 PM.")}
+{_gather_block("Great! When would you like your appointment? You can say something like 'next Tuesday at 2' or 'Friday morning'.")}
 </Response>""")
 
         sess.step = "ask_mobile"
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Thank you. Could you please say your phone number, digit by digit?")}
+{_gather_block("Perfect! What's your phone number?")}
 </Response>""")
 
     if sess.step == "ask_mobile":
         logger.info("[ask_mobile] processing speech: '%s'", speech)
 
-        # HYBRID APPROACH: Try fast extraction first, LLM fallback
-        norm = _extract_phone_fast(speech)
+        # CANADIAN OPTIMIZED: Try fast extraction with LLM fallback
+        async def llm_phone_fallback(text):
+            try:
+                ex = await extract_appointment_fields(text)
+                return ex.mobile
+            except:
+                return None
 
-        # If fast extraction failed, try LLM extracted mobile from earlier
+        norm = extract_canadian_phone(speech, llm_phone_fallback)
+
+        # Also try LLM extracted mobile from earlier if direct extraction failed
         if not norm and extracted_info.get("mobile"):
-            norm = _extract_phone_fast(extracted_info["mobile"])
+            norm = extract_canadian_phone(extracted_info["mobile"])
             logger.info("[ask_mobile] used LLM extracted mobile: '%s' -> '%s'", extracted_info["mobile"], norm)
 
         if not norm:
             logger.warning("[ask_mobile] both fast and LLM extraction failed for: '%s'", speech)
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Sorry, I didn't get the number. Could you please say your phone number, digit by digit?")}
+{_gather_block("Sorry, I didn't catch that. Can you say your phone number again?")}
 </Response>""")
 
         logger.info("[ask_mobile] normalized '%s' -> '%s', advancing to ask_time", speech, norm)
@@ -285,48 +311,52 @@ async def voice_collect(
         sess.step = "ask_time"
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Great, thank you. What date and time would you like? For example, Tuesday at 11 AM, or September 12 at 3 PM.")}
+{_gather_block("Great! When would you like your appointment? You can say something like 'next Tuesday at 2' or 'Friday morning'.")}
 </Response>""")
 
     if sess.step == "ask_time":
         logger.info("[ask_time] processing speech: '%s'", speech)
-        # Use extracted time if available
-        time_text = extracted_info.get("time") or speech
-        if not time_text:
+        # CANADIAN OPTIMIZED: Try fast time extraction with LLM fallback
+        async def llm_time_fallback(text):
+            try:
+                ex = await extract_appointment_fields(text)
+                return ex.starts_at
+            except:
+                return None
+
+        starts_at_utc = extract_canadian_time(speech, llm_time_fallback)
+
+        # Also try LLM extracted time from earlier if direct extraction failed
+        if not starts_at_utc and extracted_info.get("time"):
+            starts_at_utc = extract_canadian_time(extracted_info["time"])
+            logger.info("[ask_time] used LLM extracted time: '%s' -> %s", extracted_info["time"], starts_at_utc)
+
+        if not starts_at_utc:
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("I didn't catch that. Could you please say a specific date and time, like next Tuesday at 11 AM?")}
+{_gather_block("I didn't catch that. Could you please say a specific date and time, like next Tuesday at 2 PM?")}
 </Response>""")
 
-        try:
-            starts_at_utc = parse_to_utc(time_text)
-            logger.info("[ask_time] parsed time '%s' -> %s", time_text, starts_at_utc)
+        logger.info("[ask_time] parsed time '%s' -> %s", speech, starts_at_utc)
 
-            if HAVE_BH:
-                local_candidate = starts_at_utc.astimezone(LOCAL_TZ)
-                if not is_within_hours(local_candidate):
-                    suggestion = next_opening(local_candidate) or local_candidate
-                    return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+        if HAVE_BH:
+            local_candidate = starts_at_utc.astimezone(LOCAL_TZ)
+            if not is_within_hours(local_candidate):
+                suggestion = next_opening(local_candidate) or local_candidate
+                return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>That time is outside our business hours.</Say>
 {_gather_block(f"How about {suggestion.strftime('%A, %B %d at %I:%M %p')}? Or please say another time.")}
 </Response>""")
 
-            sess.data["starts_at_utc"] = starts_at_utc
-            sess.step = "confirm"
-            logger.info("[ask_time] time accepted, moving to confirm")
+        sess.data["starts_at_utc"] = starts_at_utc
+        sess.step = "confirm"
+        logger.info("[ask_time] time accepted, moving to confirm")
 
-            summary = _summary(sess.data)
-            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+        summary = _summary(sess.data)
+        return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 {_gather_block(f"I have {summary}. Should I book it? Please say Yes or No.")}
-</Response>""")
-
-        except Exception as e:
-            logger.warning("[ask_time] time parsing failed for '%s': %s", time_text, e)
-            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-{_gather_block("I couldn't parse that time. Could you please say a specific date and time, like next Tuesday at 11 AM?")}
 </Response>""")
 
     if sess.step == "confirm":
