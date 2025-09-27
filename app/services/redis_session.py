@@ -53,16 +53,22 @@ def get_redis_client() -> redis.Redis:
             # Parse URL to check if it's Upstash (requires TLS)
             is_upstash = "upstash.io" in redis_url
 
-            _redis_client = redis.from_url(
-                redis_url,
-                decode_responses=True,
-                socket_connect_timeout=10,
-                socket_timeout=10,
-                retry_on_timeout=True,
-                ssl_cert_reqs=None if is_upstash else "required",
-                ssl_check_hostname=False if is_upstash else True,
-                ssl_ca_certs=None if is_upstash else None
-            )
+            # Configure connection parameters
+            connection_params = {
+                "decode_responses": True,
+                "socket_connect_timeout": 10,
+                "socket_timeout": 10,
+                "retry_on_timeout": True
+            }
+
+            # Add SSL parameters only if it's Upstash and using SSL
+            if is_upstash and redis_url.startswith("rediss://"):
+                connection_params.update({
+                    "ssl_cert_reqs": None,
+                    "ssl_check_hostname": False
+                })
+
+            _redis_client = redis.from_url(redis_url, **connection_params)
             # Test connection
             _redis_client.ping()
             logger.info("Redis connection established: %s", redis_url.split('@')[-1] if '@' in redis_url else redis_url)
