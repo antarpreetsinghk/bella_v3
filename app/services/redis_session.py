@@ -27,6 +27,13 @@ class CallSession:
         """Convert to dict for Redis storage"""
         result = asdict(self)
         result["updated_at"] = self.updated_at.isoformat()
+
+        # Handle datetime objects in data field
+        if "data" in result and isinstance(result["data"], dict):
+            for key, value in result["data"].items():
+                if isinstance(value, datetime):
+                    result["data"][key] = value.isoformat()
+
         return result
 
     @classmethod
@@ -34,6 +41,20 @@ class CallSession:
         """Create from dict loaded from Redis"""
         if "updated_at" in data and isinstance(data["updated_at"], str):
             data["updated_at"] = datetime.fromisoformat(data["updated_at"])
+
+        # Handle datetime objects in data field
+        if "data" in data and isinstance(data["data"], dict):
+            for key, value in data["data"].items():
+                if isinstance(value, str) and "T" in value:
+                    try:
+                        # Handle both timezone-aware and naive datetime strings
+                        if "Z" in value.upper():
+                            data["data"][key] = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                        elif "+" in value or value.count(":") >= 2:
+                            data["data"][key] = datetime.fromisoformat(value)
+                    except ValueError:
+                        pass  # Keep as string if not a valid datetime
+
         return cls(**data)
 
 # Redis client singleton
