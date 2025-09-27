@@ -12,7 +12,6 @@ import phonenumbers
 from phonenumbers import PhoneNumberFormat, geocoder
 import parsedatetime
 from dateutil import parser
-from nameparser import HumanName
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +25,9 @@ def _get_spacy():
         try:
             import spacy
             _spacy_nlp = spacy.load("en_core_web_sm")
-        except (ImportError, OSError):
-            logger.warning("spaCy not available, falling back to regex for names")
+            logger.info("spaCy model loaded successfully")
+        except (ImportError, OSError) as e:
+            logger.warning("spaCy not available (%s), falling back to regex for names", e)
             _spacy_nlp = False
     return _spacy_nlp if _spacy_nlp else None
 
@@ -156,7 +156,7 @@ def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[datetime]:
 
 def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]:
     """
-    Rock-solid Canadian name extraction.
+    Fast Canadian name extraction with timeout protection.
 
     Returns:
         Properly formatted "First Last" name or None
@@ -167,49 +167,68 @@ def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]:
     speech = speech.strip()
     logger.info("[name_canadian] processing: '%s'", speech)
 
-    # Layer 1: spaCy NER (excellent for person names)
-    nlp = _get_spacy()
-    if nlp:
-        try:
-            doc = nlp(speech)
-            for ent in doc.ents:
-                if ent.label_ == "PERSON":
-                    # Validate with nameparser
-                    name = HumanName(ent.text)
-                    if name.first and name.last:
-                        result = f"{name.first} {name.last}"
-                        logger.info("[name_canadian] spacy success: '%s' -> %s", speech, result)
-                        return result
-        except Exception as e:
-            logger.debug("[name_canadian] spaCy failed: %s", e)
-
-    # Layer 2: Pattern matching for Canadian name patterns
+    # Fast pattern matching for Canadian name patterns (no heavy dependencies)
     patterns = [
         r"(?:my name is|i'm|this is|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+        r"(?:my name is|i'm|this is|i am)\s+([a-z]+(?:\s+[a-z]+)+)",  # lowercase
         r"^([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+calling|$|\s*$)",
-        r"([A-Z][a-z]+\s+[A-Z][a-z]+)",  # Simple pattern as fallback
+        r"^([a-z]+\s+[a-z]+)(?:\s+calling|$|\s*$)",  # lowercase
+        r"([A-Z][a-z]+\s+[A-Z][a-z]+)",  # Simple pattern
+        r"([a-z]+\s+[a-z]+)",  # Simple pattern lowercase
     ]
 
     for pattern in patterns:
         try:
             match = re.search(pattern, speech, re.IGNORECASE)
             if match:
-                candidate = match.group(1).strip()
-                # Validate with nameparser
-                name = HumanName(candidate)
-                if name.first and name.last and len(name.first) > 1 and len(name.last) > 1:
-                    result = f"{name.first} {name.last}"
+                candidate = match.group(1).strip().title()
+                # Simple validation - must have at least 2 words with 2+ chars each
+                words = candidate.split()
+                if len(words) >= 2 and all(len(w) >= 2 for w in words):
+                    result = " ".join(words[:2])  # Take first two words
                     logger.info("[name_canadian] pattern success: '%s' -> %s", speech, result)
                     return result
         except Exception as e:
             logger.debug("[name_canadian] pattern failed: %s", e)
 
-    # Layer 3: LLM fallback if provided
+    # Simple fallback - try spaCy only if fast patterns failed
+    nlp = _get_spacy()
+    if nlp:
+        try:
+            # Quick timeout protection
+            import signal
+            def timeout_handler(signum, frame):
+                raise TimeoutError("spaCy processing timeout")
+
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(2)  # 2 second timeout
+
+            doc = nlp(speech)
+            for ent in doc.ents:
+                if ent.label_ == "PERSON":
+                    result = ent.text.strip().title()
+                    words = result.split()
+                    if len(words) >= 2:
+                        result = " ".join(words[:2])
+                        logger.info("[name_canadian] spacy success: '%s' -> %s", speech, result)
+                        return result
+
+            signal.alarm(0)  # Cancel timeout
+        except (Exception, TimeoutError) as e:
+            signal.alarm(0)  # Cancel timeout
+            logger.debug("[name_canadian] spaCy failed: %s", e)
+
+    # LLM fallback if provided
     if llm_fallback:
         try:
             llm_result = llm_fallback(speech)
-            if llm_result and llm_result != speech:
-                return extract_canadian_name(llm_result, None)  # Recursive without LLM
+            if llm_result and llm_result != speech and len(llm_result) > 3:
+                # Extract just the name part from LLM result
+                words = llm_result.strip().title().split()
+                if len(words) >= 2:
+                    result = " ".join(words[:2])
+                    logger.info("[name_canadian] LLM success: '%s' -> %s", speech, result)
+                    return result
         except Exception as e:
             logger.warning("[name_canadian] LLM fallback failed: %s", e)
 
