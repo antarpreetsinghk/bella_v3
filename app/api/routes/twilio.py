@@ -9,6 +9,10 @@ from fastapi import APIRouter, Depends, Form, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from zoneinfo import ZoneInfo
 
+# Advanced extraction libraries
+import phonenumbers
+from phonenumbers import PhoneNumberFormat
+
 from app.db.session import get_session
 from app.services.session import get_session as get_call_session, reset_session
 from app.services.llm import extract_appointment_fields
@@ -95,43 +99,52 @@ def _extract_digits(s: str) -> str:
     return digit_result
 
 
-def _normalize_phone_for_ca_us(raw: str) -> str | None:
-    """Normalize phone number from speech to E.164 format."""
-    raw = (raw or "").strip()
+def _extract_phone_fast(raw: str) -> str | None:
+    """Fast phone number extraction using Google's phonenumbers library."""
+    if not raw:
+        return None
 
-    # Extract all digits from speech input (handles "eight six nine..." format)
+    raw = raw.strip()
+    logger.info("[phone_fast] processing: '%s'", raw)
+
+    # Try direct phonenumbers parsing first (handles most formats)
+    for region in ["US", "CA"]:  # North American regions
+        try:
+            parsed = phonenumbers.parse(raw, region)
+            if phonenumbers.is_valid_number(parsed):
+                result = phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
+                logger.info("[phone_fast] phonenumbers success: '%s' -> %s", raw, result)
+                return result
+        except phonenumbers.phonenumberutil.NumberParseException:
+            continue
+
+    # Fallback: extract digits and try again (for speech-to-text like "four one six...")
     digits = _extract_digits(raw)
+    if digits and len(digits) >= 7:
+        try:
+            # Try as North American number
+            if len(digits) == 10:
+                candidate = f"+1{digits}"
+            elif len(digits) == 11 and digits.startswith("1"):
+                candidate = f"+{digits}"
+            else:
+                candidate = digits
 
-    logger.info("[phone_normalize] raw='%s' digits='%s'", raw, digits)
+            parsed = phonenumbers.parse(candidate, "US")
+            if phonenumbers.is_valid_number(parsed):
+                result = phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
+                logger.info("[phone_fast] digits fallback: '%s' -> %s", raw, result)
+                return result
+        except phonenumbers.phonenumberutil.NumberParseException:
+            pass
 
-    # Handle 10-digit North American numbers
-    if len(digits) == 10:
-        result = "+1" + digits
-        logger.info("[phone_normalize] 10-digit -> %s", result)
-        return result
-
-    # Handle 11-digit with leading 1
-    if len(digits) == 11 and digits.startswith("1"):
-        result = "+" + digits
-        logger.info("[phone_normalize] 11-digit -> %s", result)
-        return result
-
-    # Handle already formatted international numbers
-    if raw.startswith("+"):
-        d = raw[1:]
-        if d.isdigit() and 7 <= len(d) <= 15:
-            logger.info("[phone_normalize] international -> %s", raw)
-            return raw
-
-    # Handle other valid digit lengths (7-15) - assume North American
-    if digits.isdigit() and 7 <= len(digits) <= 15:
-        if len(digits) >= 10:
-            result = "+1" + digits
-            logger.info("[phone_normalize] long-digits -> %s", result)
-            return result
-
-    logger.warning("[phone_normalize] failed to normalize: raw='%s' digits='%s'", raw, digits)
+    logger.warning("[phone_fast] failed to parse: '%s'", raw)
     return None
+
+
+def _normalize_phone_for_ca_us(raw: str) -> str | None:
+    """Legacy function - now uses fast extraction."""
+    return _extract_phone_fast(raw)
 
 
 def _summary(sess_data: dict) -> str:
@@ -233,11 +246,11 @@ async def voice_collect(
 
         # Check if we also got mobile number
         if extracted_info.get("mobile"):
-            norm = _normalize_phone_for_ca_us(extracted_info["mobile"])
+            norm = _extract_phone_fast(extracted_info["mobile"])
             if norm:
                 sess.data["mobile"] = norm
                 sess.step = "ask_time"
-                logger.info("[ask_name] also got mobile, jumping to ask_time")
+                logger.info("[ask_name] also got mobile '%s' -> '%s', jumping to ask_time", extracted_info["mobile"], norm)
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 {_gather_block("Great! What date and time would you like? For example, Tuesday at 11 AM, or September 12 at 3 PM.")}
@@ -251,9 +264,17 @@ async def voice_collect(
 
     if sess.step == "ask_mobile":
         logger.info("[ask_mobile] processing speech: '%s'", speech)
-        norm = _normalize_phone_for_ca_us(speech)
+
+        # HYBRID APPROACH: Try fast extraction first, LLM fallback
+        norm = _extract_phone_fast(speech)
+
+        # If fast extraction failed, try LLM extracted mobile from earlier
+        if not norm and extracted_info.get("mobile"):
+            norm = _extract_phone_fast(extracted_info["mobile"])
+            logger.info("[ask_mobile] used LLM extracted mobile: '%s' -> '%s'", extracted_info["mobile"], norm)
+
         if not norm:
-            logger.warning("[ask_mobile] normalization failed for: '%s'", speech)
+            logger.warning("[ask_mobile] both fast and LLM extraction failed for: '%s'", speech)
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 {_gather_block("Sorry, I didn't get the number. Could you please say your phone number, digit by digit?")}
@@ -357,11 +378,12 @@ async def voice_collect(
 </Response>""")
             except Exception as e:
                 logger.exception("[confirm] call=%s booking error: %r", CallSid, e)
-                reset_session(CallSid)
+                # Don't reset session - go back to ask_time instead of hanging up
+                sess.step = "ask_time"
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>I’m sorry—something went wrong on our end. Please call again later.</Say>
-  <Hangup/>
+  <Say>I'm sorry, there was an issue with that booking. Let's try a different time.</Say>
+{_gather_block("What date and time would you like instead?")}
 </Response>""")
 
         if any(k in ans for k in ["no", "nope", "cancel", "change"]):
