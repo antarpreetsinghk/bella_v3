@@ -49,35 +49,75 @@ async def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str
     for region in ["CA", "US"]:
         try:
             parsed = phonenumbers.parse(speech, region)
-            if phonenumbers.is_valid_number(parsed):
-                # Verify it's North American
-                country = geocoder.country_name_for_number(parsed, "en")
-                if country in ["Canada", "United States"]:
+            if phonenumbers.is_valid_number(parsed) or phonenumbers.is_possible_number(parsed):
+                # For voice apps, be lenient with geographic validation
+                try:
+                    country = geocoder.country_name_for_number(parsed, "en")
+                    is_north_american = country in ["Canada", "United States"] or not country
+                except:
+                    is_north_american = True  # Default to accepting if geocoding fails
+
+                if is_north_american:
                     result = phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
-                    logger.info("[phone_canadian] direct success: '%s' -> %s", speech, result)
+                    validity = "valid" if phonenumbers.is_valid_number(parsed) else "possible"
+                    logger.info("[phone_canadian] direct success (%s): '%s' -> %s", speech, result, validity)
                     return result
         except phonenumbers.phonenumberutil.NumberParseException:
             continue
 
-    # Layer 2: Extract digits and try again (speech-to-text "four one six...")
-    digits = re.sub(r'\D+', '', speech)
-    if digits and len(digits) >= 7:
-        try:
-            # Format as North American number
-            if len(digits) == 10:
-                candidate = f"+1{digits}"
-            elif len(digits) == 11 and digits.startswith("1"):
-                candidate = f"+{digits}"
-            else:
-                candidate = f"+1{digits[-10:]}"  # Take last 10 digits
+    # Layer 2: Enhanced digit extraction (handles edge cases and spelled-out numbers)
 
-            parsed = phonenumbers.parse(candidate, "CA")
-            if phonenumbers.is_valid_number(parsed):
-                result = phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
-                logger.info("[phone_canadian] digits fallback: '%s' -> %s", speech, result)
-                return result
-        except phonenumbers.phonenumberutil.NumberParseException:
-            pass
+    # First: Handle spelled-out numbers ("four one six five five five...")
+    word_to_digit = {
+        'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
+        'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
+        'oh': '0'  # Common speech pattern
+    }
+
+    # Convert spelled-out numbers
+    words = re.findall(r'\b(?:zero|one|two|three|four|five|six|seven|eight|nine|oh)\b', speech.lower())
+    if len(words) >= 7:  # Likely a phone number
+        spelled_digits = ''.join(word_to_digit.get(word, '') for word in words)
+        logger.debug("[phone_canadian] found spelled digits: %s", spelled_digits)
+    else:
+        spelled_digits = ''
+
+    # Extract regular digits with multiple patterns
+    original_digits = re.sub(r'\D+', '', speech)
+
+    # Try multiple digit extraction patterns
+    digit_patterns = [
+        spelled_digits,  # Spelled-out numbers
+        original_digits,  # Raw digits
+        re.sub(r'[^\d\s]', '', speech).replace(' ', ''),  # Keep spaces, remove punctuation
+        ''.join(re.findall(r'\d', speech))  # Alternative extraction
+    ]
+
+    for digits in digit_patterns:
+        if digits and len(digits) >= 7:
+            try:
+                # Enhanced North American number formatting
+                if len(digits) == 10:
+                    candidate = f"+1{digits}"
+                elif len(digits) == 11 and digits.startswith("1"):
+                    candidate = f"+{digits}"
+                elif len(digits) >= 10:
+                    candidate = f"+1{digits[-10:]}"  # Take last 10 digits
+                else:
+                    continue  # Skip if too short
+
+                logger.debug("[phone_canadian] trying candidate: '%s' from '%s'", candidate, digits)
+                parsed = phonenumbers.parse(candidate, "CA")
+
+                # For voice applications, be more lenient - accept if parseable even if not strictly valid
+                # This handles test numbers and edge cases that callers might use
+                if phonenumbers.is_valid_number(parsed) or phonenumbers.is_possible_number(parsed):
+                    result = phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
+                    validity = "valid" if phonenumbers.is_valid_number(parsed) else "possible"
+                    logger.info("[phone_canadian] digits success (%s): '%s' -> %s (pattern: %s)", validity, speech, result, digits)
+                    return result
+            except phonenumbers.phonenumberutil.NumberParseException:
+                continue
 
     # Layer 3: LLM fallback if provided
     if llm_fallback:
