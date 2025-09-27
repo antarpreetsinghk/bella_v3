@@ -50,12 +50,18 @@ def get_redis_client() -> redis.Redis:
             logger.warning("REDIS_URL not set, using localhost fallback")
 
         try:
+            # Parse URL to check if it's Upstash (requires TLS)
+            is_upstash = "upstash.io" in redis_url
+
             _redis_client = redis.from_url(
                 redis_url,
                 decode_responses=True,
-                socket_connect_timeout=5,
-                socket_timeout=5,
-                retry_on_timeout=True
+                socket_connect_timeout=10,
+                socket_timeout=10,
+                retry_on_timeout=True,
+                ssl_cert_reqs=None if is_upstash else "required",
+                ssl_check_hostname=False if is_upstash else True,
+                ssl_ca_certs=None if is_upstash else None
             )
             # Test connection
             _redis_client.ping()
