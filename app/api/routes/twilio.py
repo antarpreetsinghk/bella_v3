@@ -211,18 +211,38 @@ async def voice_collect(
         try:
             ex = await extract_appointment_fields(speech)
             exd = ex.model_dump()
-            if exd.get("full_name"):
-                sess.data["full_name"] = " ".join(exd["full_name"].split())
-                sess.step = "ask_mobile"
-            if exd.get("mobile"):
-                norm = _normalize_phone_for_ca_us(exd["mobile"])
+            extracted_name = exd.get("full_name")
+            extracted_mobile = exd.get("mobile")
+            extracted_time = exd.get("starts_at")
+
+            if extracted_name:
+                sess.data["full_name"] = " ".join(extracted_name.split())
+                logger.info("[power_caller] extracted name: '%s'", extracted_name)
+
+            if extracted_mobile:
+                norm = _normalize_phone_for_ca_us(extracted_mobile)
                 if norm:
                     sess.data["mobile"] = norm
-            if exd.get("starts_at"):
+                    logger.info("[power_caller] extracted mobile: '%s' -> '%s'", extracted_mobile, norm)
+
+            if extracted_time:
                 try:
-                    sess.data["starts_at_utc"] = parse_to_utc(exd["starts_at"])
+                    sess.data["starts_at_utc"] = parse_to_utc(extracted_time)
+                    logger.info("[power_caller] extracted time: '%s'", extracted_time)
                 except Exception:
                     pass
+
+            # Determine next step based on what we have
+            if sess.data.get("starts_at_utc"):
+                sess.step = "confirm"  # Have everything, go to confirmation
+            elif sess.data.get("mobile"):
+                sess.step = "ask_time"  # Have name and mobile, ask for time
+            elif sess.data.get("full_name"):
+                sess.step = "ask_mobile"  # Have name, ask for mobile
+            else:
+                # Only proceed if we extracted a name, otherwise use the fallback below
+                if extracted_name:
+                    sess.step = "ask_mobile"
         except Exception:
             pass
 
