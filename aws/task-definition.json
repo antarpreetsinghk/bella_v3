@@ -77,6 +77,10 @@
         {
           "name": "TWILIO_AUTH_TOKEN",
           "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:TWILIO_AUTH_TOKEN::"
+        },
+        {
+          "name": "REDIS_URL",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:REDIS_URL::"
         }
       ],
       "logConfiguration": {
