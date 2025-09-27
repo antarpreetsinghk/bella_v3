@@ -206,50 +206,43 @@ async def voice_collect(
 </Response>"""
         return _twiml(twiml)
 
-    # Power-caller shortcut: if we're at the first step and user says everything, try to prefill via LLM
-    if sess.step == "ask_name":
+    # Power-caller shortcut: try to extract information via LLM for any step
+    extracted_info = {}
+    if sess.step in ["ask_name", "ask_mobile", "ask_time"]:
         try:
             ex = await extract_appointment_fields(speech)
             exd = ex.model_dump()
-            extracted_name = exd.get("full_name")
-            extracted_mobile = exd.get("mobile")
-            extracted_time = exd.get("starts_at")
-
-            if extracted_name:
-                sess.data["full_name"] = " ".join(extracted_name.split())
-                logger.info("[power_caller] extracted name: '%s'", extracted_name)
-
-            if extracted_mobile:
-                norm = _normalize_phone_for_ca_us(extracted_mobile)
-                if norm:
-                    sess.data["mobile"] = norm
-                    logger.info("[power_caller] extracted mobile: '%s' -> '%s'", extracted_mobile, norm)
-
-            if extracted_time:
-                try:
-                    sess.data["starts_at_utc"] = parse_to_utc(extracted_time)
-                    logger.info("[power_caller] extracted time: '%s'", extracted_time)
-                except Exception:
-                    pass
-
-            # Determine next step based on what we have
-            if sess.data.get("starts_at_utc"):
-                sess.step = "confirm"  # Have everything, go to confirmation
-            elif sess.data.get("mobile"):
-                sess.step = "ask_time"  # Have name and mobile, ask for time
-            elif sess.data.get("full_name"):
-                sess.step = "ask_mobile"  # Have name, ask for mobile
-            else:
-                # Only proceed if we extracted a name, otherwise use the fallback below
-                if extracted_name:
-                    sess.step = "ask_mobile"
-        except Exception:
-            pass
+            extracted_info = {
+                "name": exd.get("full_name"),
+                "mobile": exd.get("mobile"),
+                "time": exd.get("starts_at")
+            }
+            logger.info("[llm_extract] step=%s speech='%s' extracted=%s", sess.step, speech, extracted_info)
+        except Exception as e:
+            logger.warning("[llm_extract] failed: %s", e)
 
     # --- Step machine ---
     if sess.step == "ask_name":
-        # treat any non-empty speech as a name
-        sess.data["full_name"] = " ".join(speech.split())
+        # Use extracted name if available, otherwise treat speech as name
+        if extracted_info.get("name"):
+            sess.data["full_name"] = " ".join(extracted_info["name"].split())
+            logger.info("[ask_name] used extracted name: '%s'", extracted_info["name"])
+        else:
+            sess.data["full_name"] = " ".join(speech.split())
+            logger.info("[ask_name] used speech as name: '%s'", speech)
+
+        # Check if we also got mobile number
+        if extracted_info.get("mobile"):
+            norm = _normalize_phone_for_ca_us(extracted_info["mobile"])
+            if norm:
+                sess.data["mobile"] = norm
+                sess.step = "ask_time"
+                logger.info("[ask_name] also got mobile, jumping to ask_time")
+                return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+{_gather_block("Great! What date and time would you like? For example, Tuesday at 11 AM, or September 12 at 3 PM.")}
+</Response>""")
+
         sess.step = "ask_mobile"
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -275,13 +268,19 @@ async def voice_collect(
 </Response>""")
 
     if sess.step == "ask_time":
-        # Try LLM parsing for natural phrases; enforce future-only via parse_to_utc
+        logger.info("[ask_time] processing speech: '%s'", speech)
+        # Use extracted time if available
+        time_text = extracted_info.get("time") or speech
+        if not time_text:
+            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+{_gather_block("I didn't catch that. Could you please say a specific date and time, like next Tuesday at 11 AM?")}
+</Response>""")
+
         try:
-            ex = await extract_appointment_fields(speech)
-            exd = ex.model_dump()
-            if not exd.get("starts_at"):
-                raise ValueError("no time")
-            starts_at_utc = parse_to_utc(exd["starts_at"])
+            starts_at_utc = parse_to_utc(time_text)
+            logger.info("[ask_time] parsed time '%s' -> %s", time_text, starts_at_utc)
+
             if HAVE_BH:
                 local_candidate = starts_at_utc.astimezone(LOCAL_TZ)
                 if not is_within_hours(local_candidate):
@@ -291,19 +290,22 @@ async def voice_collect(
   <Say>That time is outside our business hours.</Say>
 {_gather_block(f"How about {suggestion.strftime('%A, %B %d at %I:%M %p')}? Or please say another time.")}
 </Response>""")
+
             sess.data["starts_at_utc"] = starts_at_utc
-        except Exception:
+            sess.step = "confirm"
+            logger.info("[ask_time] time accepted, moving to confirm")
+
+            summary = _summary(sess.data)
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("I couldn’t parse that time. Could you please say a specific date and time, like next Tuesday at 11 AM?")}
+{_gather_block(f"I have {summary}. Should I book it? Please say Yes or No.")}
 </Response>""")
 
-        # Move to confirmation
-        sess.step = "confirm"
-        summary = _summary(sess.data)
-        return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+        except Exception as e:
+            logger.warning("[ask_time] time parsing failed for '%s': %s", time_text, e)
+            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(f"I have {summary}. Should I book it? Please say Yes or No.")}
+{_gather_block("I couldn't parse that time. Could you please say a specific date and time, like next Tuesday at 11 AM?")}
 </Response>""")
 
     if sess.step == "confirm":
