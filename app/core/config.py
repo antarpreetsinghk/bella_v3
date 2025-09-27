@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     CSRF_SECRET: str | None = None
     TWILIO_AUTH_TOKEN: str | None = None
 
+    # --- Redis Session Storage ---
+    REDIS_URL: str | None = None
+
     # --- Monitoring & Logging ---
     APP_ENV: str = "production"
     LOG_LEVEL: str = "INFO"

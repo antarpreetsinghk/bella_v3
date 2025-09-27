@@ -21,7 +21,7 @@ from app.services.canadian_extraction import (
 )
 
 from app.db.session import get_session
-from app.services.session import get_session as get_call_session, reset_session
+from app.services.redis_session import get_session as get_call_session, reset_session, save_session
 from app.services.llm import extract_appointment_fields
 from app.services.booking import _parse_to_utc as parse_to_utc  # reuse future-only guard
 from app.crud.user import get_user_by_mobile, create_user
@@ -183,7 +183,7 @@ def _followup_prompt(missing: list[str] | None) -> str:
 @router.post("/voice")
 async def voice_entry(CallSid: str = Form(default="")) -> Response:
     """Start the multi-turn wizard with a polite greeting."""
-    reset_session(CallSid)  # fresh start
+    # DON'T reset existing sessions - let them continue where they left off
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 {_gather_block("Hi there! Thanks for calling. I'll help you book your appointment today. What's your name?")}
@@ -267,6 +267,7 @@ async def voice_collect(
 
         # Always proceed to ask_mobile step (no smart jumping)
         sess.step = "ask_mobile"
+        save_session(sess)  # Persist state change
         logger.info("[session_debug] after ask_name step=%s data=%s", sess.step, sess.data)
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -301,6 +302,7 @@ async def voice_collect(
         logger.info("[ask_mobile] normalized '%s' -> '%s', advancing to ask_time", speech, norm)
         sess.data["mobile"] = norm
         sess.step = "ask_time"
+        save_session(sess)  # Persist state change
         logger.info("[session_debug] after ask_mobile step=%s data=%s", sess.step, sess.data)
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -344,6 +346,7 @@ async def voice_collect(
 
         sess.data["starts_at_utc"] = starts_at_utc
         sess.step = "confirm"
+        save_session(sess)  # Persist state change
         logger.info("[ask_time] time accepted, moving to confirm")
         logger.info("[session_debug] after ask_time step=%s data=%s", sess.step, sess.data)
 
