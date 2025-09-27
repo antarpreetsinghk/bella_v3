@@ -244,6 +244,8 @@ async def voice_collect(
             logger.warning("[llm_extract] failed: %s", e)
 
     # --- Step machine ---
+    logger.info("[session_debug] before step=%s data=%s", sess.step, sess.data)
+
     if sess.step == "ask_name":
         # CANADIAN OPTIMIZED: Try fast name extraction with LLM fallback
         async def llm_name_fallback(text):
@@ -253,29 +255,19 @@ async def voice_collect(
             except:
                 return None
 
-        extracted_name = extract_canadian_name(speech, llm_name_fallback)
+        extracted_name = await extract_canadian_name(speech, llm_name_fallback)
 
         # Also try LLM extracted name from earlier if direct extraction failed
         if not extracted_name and extracted_info.get("name"):
-            extracted_name = extract_canadian_name(extracted_info["name"])
+            extracted_name = await extract_canadian_name(extracted_info["name"])
 
         # Fallback to treating entire speech as name if extraction fails
         sess.data["full_name"] = extracted_name or " ".join(speech.split())
         logger.info("[ask_name] final name: '%s' (from speech: '%s')", sess.data["full_name"], speech)
 
-        # Check if we also got mobile number
-        if extracted_info.get("mobile"):
-            norm = extract_canadian_phone(extracted_info["mobile"])
-            if norm:
-                sess.data["mobile"] = norm
-                sess.step = "ask_time"
-                logger.info("[ask_name] also got mobile '%s' -> '%s', jumping to ask_time", extracted_info["mobile"], norm)
-                return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-{_gather_block("Great! When would you like your appointment? You can say something like 'next Tuesday at 2' or 'Friday morning'.")}
-</Response>""")
-
+        # Always proceed to ask_mobile step (no smart jumping)
         sess.step = "ask_mobile"
+        logger.info("[session_debug] after ask_name step=%s data=%s", sess.step, sess.data)
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 {_gather_block("Perfect! What's your phone number?")}
@@ -292,11 +284,11 @@ async def voice_collect(
             except:
                 return None
 
-        norm = extract_canadian_phone(speech, llm_phone_fallback)
+        norm = await extract_canadian_phone(speech, llm_phone_fallback)
 
         # Also try LLM extracted mobile from earlier if direct extraction failed
         if not norm and extracted_info.get("mobile"):
-            norm = extract_canadian_phone(extracted_info["mobile"])
+            norm = await extract_canadian_phone(extracted_info["mobile"])
             logger.info("[ask_mobile] used LLM extracted mobile: '%s' -> '%s'", extracted_info["mobile"], norm)
 
         if not norm:
@@ -309,6 +301,7 @@ async def voice_collect(
         logger.info("[ask_mobile] normalized '%s' -> '%s', advancing to ask_time", speech, norm)
         sess.data["mobile"] = norm
         sess.step = "ask_time"
+        logger.info("[session_debug] after ask_mobile step=%s data=%s", sess.step, sess.data)
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 {_gather_block("Great! When would you like your appointment? You can say something like 'next Tuesday at 2' or 'Friday morning'.")}
@@ -324,11 +317,11 @@ async def voice_collect(
             except:
                 return None
 
-        starts_at_utc = extract_canadian_time(speech, llm_time_fallback)
+        starts_at_utc = await extract_canadian_time(speech, llm_time_fallback)
 
         # Also try LLM extracted time from earlier if direct extraction failed
         if not starts_at_utc and extracted_info.get("time"):
-            starts_at_utc = extract_canadian_time(extracted_info["time"])
+            starts_at_utc = await extract_canadian_time(extracted_info["time"])
             logger.info("[ask_time] used LLM extracted time: '%s' -> %s", extracted_info["time"], starts_at_utc)
 
         if not starts_at_utc:
@@ -352,6 +345,7 @@ async def voice_collect(
         sess.data["starts_at_utc"] = starts_at_utc
         sess.step = "confirm"
         logger.info("[ask_time] time accepted, moving to confirm")
+        logger.info("[session_debug] after ask_time step=%s data=%s", sess.step, sess.data)
 
         summary = _summary(sess.data)
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>

@@ -32,7 +32,7 @@ def _get_spacy():
     return _spacy_nlp if _spacy_nlp else None
 
 
-def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str]:
+async def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str]:
     """
     Rock-solid Canadian phone number extraction.
 
@@ -82,9 +82,9 @@ def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str]:
     # Layer 3: LLM fallback if provided
     if llm_fallback:
         try:
-            llm_result = llm_fallback(speech)
+            llm_result = await llm_fallback(speech)
             if llm_result and llm_result != speech:
-                return extract_canadian_phone(llm_result, None)  # Recursive without LLM
+                return await extract_canadian_phone(llm_result, None)  # Recursive without LLM
         except Exception as e:
             logger.warning("[phone_canadian] LLM fallback failed: %s", e)
 
@@ -92,7 +92,7 @@ def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str]:
     return None
 
 
-def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[datetime]:
+async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[datetime]:
     """
     Rock-solid Canadian time extraction with timezone awareness.
 
@@ -137,7 +137,7 @@ def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[datetime]:
     # Layer 3: LLM fallback if provided
     if llm_fallback:
         try:
-            llm_result = llm_fallback(speech)
+            llm_result = await llm_fallback(speech)
             if llm_result and llm_result != speech:
                 # Try to parse LLM result as ISO format first
                 try:
@@ -146,7 +146,7 @@ def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[datetime]:
                     return dt.astimezone(timezone.utc)
                 except:
                     # Recursive parse of LLM result
-                    return extract_canadian_time(llm_result, None)
+                    return await extract_canadian_time(llm_result, None)
         except Exception as e:
             logger.warning("[time_canadian] LLM fallback failed: %s", e)
 
@@ -154,7 +154,7 @@ def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[datetime]:
     return None
 
 
-def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]:
+async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]:
     """
     Fast Canadian name extraction with timeout protection.
 
@@ -221,7 +221,7 @@ def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]:
     # LLM fallback if provided
     if llm_fallback:
         try:
-            llm_result = llm_fallback(speech)
+            llm_result = await llm_fallback(speech)
             if llm_result and llm_result != speech and len(llm_result) > 3:
                 # Extract just the name part from LLM result
                 words = llm_result.strip().title().split()
@@ -237,16 +237,16 @@ def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]:
 
 
 # Convenience functions that match existing API
-def extract_phone_fast(speech: str) -> Optional[str]:
+async def extract_phone_fast(speech: str) -> Optional[str]:
     """Alias for backwards compatibility"""
-    return extract_canadian_phone(speech)
+    return await extract_canadian_phone(speech)
 
 
-def extract_time_fast(speech: str) -> Optional[datetime]:
+async def extract_time_fast(speech: str) -> Optional[datetime]:
     """Alias for backwards compatibility"""
-    return extract_canadian_time(speech)
+    return await extract_canadian_time(speech)
 
 
-def extract_name_fast(speech: str) -> Optional[str]:
+async def extract_name_fast(speech: str) -> Optional[str]:
     """Alias for backwards compatibility"""
-    return extract_canadian_name(speech)
+    return await extract_canadian_name(speech)
