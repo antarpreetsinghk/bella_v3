@@ -61,12 +61,10 @@ def get_redis_client() -> redis.Redis:
                 "retry_on_timeout": True
             }
 
-            # Add SSL parameters only if it's Upstash and using SSL
-            if is_upstash and redis_url.startswith("rediss://"):
-                connection_params.update({
-                    "ssl_cert_reqs": None,
-                    "ssl_check_hostname": False
-                })
+            # For Upstash, convert redis:// to rediss:// for SSL
+            if is_upstash and redis_url.startswith("redis://"):
+                redis_url = redis_url.replace("redis://", "rediss://", 1)
+                logger.info("Converted Redis URL to SSL for Upstash")
 
             _redis_client = redis.from_url(redis_url, **connection_params)
             # Test connection
