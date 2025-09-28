@@ -458,7 +458,7 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
 
         # Remove trigger phrases to isolate name
         trigger_patterns = [
-            r'\b(my (?:full )?name is|i\'m|this is|i am)\s*[.,]*\s*',
+            r'\b(my (?:full )?name is|i\'m|this is|i am|it\'s|it is)\s*[.,]*\s*',
             r'\b(calling|speaking)\s*$'
         ]
 
