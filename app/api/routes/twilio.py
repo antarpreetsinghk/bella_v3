@@ -70,8 +70,8 @@ def _gather_block(prompt: str) -> str:
           method="POST"
           action="/twilio/voice/collect"
           actionOnEmptyResult="true"
-          speechTimeout="3"
-          timeout="6"
+          speechTimeout="5"
+          timeout="10"
           enhanced="true">
     <Say voice="alice" language="en-CA">{prompt}</Say>
   </Gather>
@@ -281,7 +281,8 @@ async def voice_collect(
         logger.info("[confirm_name] processing speech: '%s'", speech)
         speech_lower = speech.lower().strip()
 
-        if speech_lower in ["yes", "yeah", "yep", "correct", "right", "that's right"]:
+        # Check for positive confirmation (flexible matching)
+        if any(word in speech_lower for word in ["yes", "yeah", "yep", "correct", "right"]):
             # Name confirmed, proceed to phone
             sess.step = "ask_mobile"
             save_session(sess)
@@ -290,7 +291,8 @@ async def voice_collect(
 <Response>
 {_gather_block("Perfect! What's your phone number?")}
 </Response>""")
-        elif speech_lower in ["no", "nope", "wrong", "incorrect", "that's wrong"]:
+        # Check for negative confirmation (flexible matching)
+        elif any(word in speech_lower for word in ["no", "nope", "wrong", "incorrect", "not"]):
             # Name incorrect, ask again
             sess.step = "ask_name"
             sess.data.pop("full_name", None)  # Clear the incorrect name
