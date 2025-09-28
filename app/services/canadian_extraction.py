@@ -34,7 +34,7 @@ def _get_spacy():
 
 async def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str]:
     """
-    Rock-solid Canadian phone number extraction.
+    Enhanced Canadian phone number extraction with word2number support.
 
     Returns:
         E.164 formatted phone number (+14165551234) or None
@@ -65,29 +65,64 @@ async def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str
         except phonenumbers.phonenumberutil.NumberParseException:
             continue
 
-    # Layer 2: Enhanced digit extraction (handles edge cases and spelled-out numbers)
+    # Layer 2: Enhanced word-to-number conversion using word2number library
+    try:
+        from word2number import w2n
 
-    # First: Handle spelled-out numbers ("four one six five five five...")
+        # Split speech into words and try to convert number words
+        words = speech.lower().split()
+        converted_digits = ""
+
+        # First, try word2number for natural number sequences
+        number_words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'oh']
+        if any(word in number_words for word in words):
+            for word in words:
+                try:
+                    if word in number_words:
+                        if word == 'oh':
+                            converted_digits += '0'
+                        else:
+                            digit = str(w2n.word_to_num(word))
+                            if len(digit) == 1:  # Single digit only
+                                converted_digits += digit
+                except:
+                    # If word2number fails, use manual mapping
+                    word_to_digit = {
+                        'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
+                        'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
+                        'oh': '0'
+                    }
+                    if word in word_to_digit:
+                        converted_digits += word_to_digit[word]
+
+        logger.debug("[phone_canadian] word2number conversion: '%s' -> '%s'", speech, converted_digits)
+
+    except ImportError:
+        logger.debug("[phone_canadian] word2number not available, using fallback")
+        converted_digits = ""
+
+    # Layer 3: Enhanced digit extraction (handles edge cases and spelled-out numbers)
+
+    # Fallback spelled-out numbers mapping
     word_to_digit = {
         'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
         'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
         'oh': '0'  # Common speech pattern
     }
 
-    # Convert spelled-out numbers
-    words = re.findall(r'\b(?:zero|one|two|three|four|five|six|seven|eight|nine|oh)\b', speech.lower())
-    if len(words) >= 7:  # Likely a phone number
-        spelled_digits = ''.join(word_to_digit.get(word, '') for word in words)
-        logger.debug("[phone_canadian] found spelled digits: %s", spelled_digits)
-    else:
-        spelled_digits = ''
+    # Convert spelled-out numbers (fallback if word2number not available)
+    if not converted_digits:
+        words = re.findall(r'\b(?:zero|one|two|three|four|five|six|seven|eight|nine|oh)\b', speech.lower())
+        if len(words) >= 7:  # Likely a phone number
+            converted_digits = ''.join(word_to_digit.get(word, '') for word in words)
+            logger.debug("[phone_canadian] fallback spelled digits: %s", converted_digits)
 
     # Extract regular digits with multiple patterns
     original_digits = re.sub(r'\D+', '', speech)
 
-    # Try multiple digit extraction patterns
+    # Try multiple digit extraction patterns in order of preference
     digit_patterns = [
-        spelled_digits,  # Spelled-out numbers
+        converted_digits,  # word2number or spelled-out numbers
         original_digits,  # Raw digits
         re.sub(r'[^\d\s]', '', speech).replace(' ', ''),  # Keep spaces, remove punctuation
         ''.join(re.findall(r'\d', speech))  # Alternative extraction
@@ -119,7 +154,7 @@ async def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str
             except phonenumbers.phonenumberutil.NumberParseException:
                 continue
 
-    # Layer 3: LLM fallback if provided
+    # Layer 4: LLM fallback if provided
     if llm_fallback:
         try:
             llm_result = await llm_fallback(speech)
@@ -134,7 +169,7 @@ async def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str
 
 async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[datetime]:
     """
-    Rock-solid Canadian time extraction with timezone awareness.
+    Enhanced Canadian time extraction with dateparser and advanced preprocessing.
 
     Returns:
         UTC datetime object or None
@@ -145,32 +180,85 @@ async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[date
     speech = speech.strip()
     logger.info("[time_canadian] processing: '%s'", speech)
 
-    # Preprocessing: Handle problematic phrase patterns
+    # Enhanced preprocessing: Handle more speech patterns and speech-to-text errors
     original_speech = speech
     speech_lower = speech.lower()
 
-    # Pattern 1: "Next week. Thursday at 9:30 a.m." -> "next Thursday at 9:30 a.m."
-    if speech_lower.startswith("next week."):
-        cleaned = speech[10:].strip()  # Remove "Next week."
+    # Enhanced pattern handling for speech-to-text artifacts
+    preprocessing_patterns = [
+        # Handle periods after phrases
+        ("next week.", "next week"),
+        ("this week.", "this week"),
+        ("tomorrow.", "tomorrow"),
+        ("monday.", "monday"),
+        ("tuesday.", "tuesday"),
+        ("wednesday.", "wednesday"),
+        ("thursday.", "thursday"),
+        ("friday.", "friday"),
+        ("saturday.", "saturday"),
+        ("sunday.", "sunday"),
+        # Handle common speech-to-text time errors
+        ("a.m.", "AM"),
+        ("p.m.", "PM"),
+        ("am.", "AM"),
+        ("pm.", "PM"),
+        ("o'clock", "o clock"),
+        ("o clock", ""),
+        ("thirty", "30"),
+        ("fifteen", "15"),
+        ("fourty", "40"),  # Common speech error
+        ("forty", "40"),
+        ("o'clock", ""),
+    ]
+
+    for old_pattern, new_pattern in preprocessing_patterns:
+        speech = speech.replace(old_pattern, new_pattern)
+
+    # Handle complex phrase patterns
+    if speech_lower.startswith("next week"):
+        cleaned = speech[9:].strip()  # Remove "next week"
         if cleaned:
             speech = f"next {cleaned}"
-
-    # Pattern 2: "This week. Friday at 2 p.m." -> "this Friday at 2 p.m."
-    elif speech_lower.startswith("this week."):
-        cleaned = speech[10:].strip()  # Remove "This week."
+    elif speech_lower.startswith("this week"):
+        cleaned = speech[9:].strip()  # Remove "this week"
         if cleaned:
             speech = f"this {cleaned}"
-
-    # Pattern 3: "Tomorrow. At 3 p.m." -> "tomorrow at 3 p.m."
-    elif speech_lower.startswith("tomorrow."):
-        cleaned = speech[9:].strip()  # Remove "Tomorrow."
-        if cleaned:
+    elif speech_lower.startswith("tomorrow"):
+        cleaned = speech[8:].strip()  # Remove "tomorrow"
+        if cleaned and not cleaned.startswith("at"):
             speech = f"tomorrow {cleaned}"
+
+    # Clean extra spaces
+    speech = re.sub(r'\s+', ' ', speech).strip()
 
     if speech != original_speech:
         logger.debug("[time_canadian] preprocessed: '%s' -> '%s'", original_speech, speech)
 
-    # Layer 1: parsedatetime (excellent for Canadian English)
+    # Layer 1: dateparser library (better natural language processing)
+    try:
+        import dateparser
+
+        # Configure dateparser for Canadian context
+        settings = {
+            'TIMEZONE': 'America/Edmonton',
+            'RETURN_AS_TIMEZONE_AWARE': True,
+            'PREFER_DATES_FROM': 'future',
+            'PREFER_DAY_OF_MONTH': 'first',
+            'SKIP_TOKENS': ['at', 'on', 'for'],  # Skip common filler words
+        }
+
+        result = dateparser.parse(speech, settings=settings)
+        if result:
+            utc_result = result.astimezone(timezone.utc)
+            logger.info("[time_canadian] dateparser success: '%s' -> %s", speech, utc_result)
+            return utc_result
+
+    except ImportError:
+        logger.debug("[time_canadian] dateparser not available, using fallback")
+    except Exception as e:
+        logger.debug("[time_canadian] dateparser failed: %s", e)
+
+    # Layer 2: parsedatetime (excellent for Canadian English)
     try:
         cal = parsedatetime.Calendar()
         time_struct, parse_status = cal.parse(speech)
@@ -186,7 +274,7 @@ async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[date
     except Exception as e:
         logger.debug("[time_canadian] parsedatetime failed: %s", e)
 
-    # Layer 2: dateutil parser (robust fallback)
+    # Layer 3: dateutil parser (robust fallback)
     try:
         # Try fuzzy parsing
         dt = parser.parse(speech, fuzzy=True)
@@ -199,7 +287,38 @@ async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[date
     except Exception as e:
         logger.debug("[time_canadian] dateutil failed: %s", e)
 
-    # Layer 3: LLM fallback if provided
+    # Layer 4: Pattern-based extraction for common formats
+    try:
+        # Try to extract common time patterns manually
+        time_patterns = [
+            r'(\w+day)\s+at\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)',  # "Monday at 2 PM"
+            r'(\w+day)\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)',       # "Monday 2 PM"
+            r'(next|this)\s+(\w+day)\s+at\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)',  # "next Monday at 2 PM"
+            r'(tomorrow|today)\s+at\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)',        # "tomorrow at 2 PM"
+        ]
+
+        for pattern in time_patterns:
+            match = re.search(pattern, speech, re.IGNORECASE)
+            if match:
+                # Try to construct a parseable string
+                groups = match.groups()
+                if len(groups) >= 3:
+                    constructed = " ".join(groups)
+                    try:
+                        dt = parser.parse(constructed, fuzzy=True)
+                        if dt.tzinfo is None:
+                            from zoneinfo import ZoneInfo
+                            dt = dt.replace(tzinfo=ZoneInfo("America/Edmonton"))
+                        result = dt.astimezone(timezone.utc)
+                        logger.info("[time_canadian] pattern success: '%s' -> %s", speech, result)
+                        return result
+                    except:
+                        continue
+
+    except Exception as e:
+        logger.debug("[time_canadian] pattern extraction failed: %s", e)
+
+    # Layer 5: LLM fallback if provided
     if llm_fallback:
         try:
             llm_result = await llm_fallback(speech)
@@ -221,7 +340,7 @@ async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[date
 
 async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]:
     """
-    Fast Canadian name extraction with timeout protection.
+    Enhanced Canadian name extraction with nameparser and fuzzy matching.
 
     Returns:
         Properly formatted "First Last" name or None
@@ -232,7 +351,45 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
     speech = speech.strip()
     logger.info("[name_canadian] processing: '%s'", speech)
 
-    # Enhanced patterns for Canadian name extraction - handle speech-to-text punctuation
+    # Layer 1: nameparser library for robust name parsing
+    try:
+        from nameparser import HumanName
+
+        # Preprocess speech patterns to clean for nameparser
+        cleaned = speech.replace("my name is.", "my name is")
+        cleaned = cleaned.replace("My name is.", "My name is")
+
+        # Remove trigger phrases to isolate name
+        trigger_patterns = [
+            r'\b(my (?:full )?name is|i\'m|this is|i am)\s*[.,]*\s*',
+            r'\b(calling|speaking)\s*$'
+        ]
+
+        for pattern in trigger_patterns:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE).strip()
+
+        if cleaned and len(cleaned) > 2:
+            name = HumanName(cleaned)
+            if name.first and name.last:
+                result = f"{name.first} {name.last}".title()
+                logger.info("[name_canadian] nameparser success: '%s' -> %s", speech, result)
+                return result
+
+            # Try with just the cleaned text if nameparser couldn't parse parts
+            words = cleaned.split()
+            if len(words) >= 2:
+                # Take first two words as first and last name
+                result = f"{words[0]} {words[1]}".title()
+                if all(len(w) >= 2 and w.isalpha() for w in words[:2]):
+                    logger.info("[name_canadian] nameparser fallback: '%s' -> %s", speech, result)
+                    return result
+
+    except ImportError:
+        logger.debug("[name_canadian] nameparser not available, using fallback")
+    except Exception as e:
+        logger.debug("[name_canadian] nameparser failed: %s", e)
+
+    # Layer 2: Enhanced regex patterns for Canadian name extraction
     patterns = [
         # Enhanced patterns that handle periods, commas, and extra spaces after trigger phrases
         r"(?:my (?:full )?name is)[.\s,]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
@@ -261,7 +418,43 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
         except Exception as e:
             logger.debug("[name_canadian] pattern failed: %s", e)
 
-    # Simple fallback - try spaCy only if fast patterns failed
+    # Layer 3: Fuzzy matching for common speech-to-text errors
+    try:
+        from rapidfuzz import fuzz
+
+        # Common Canadian names for fuzzy matching
+        common_first_names = [
+            "John", "Jane", "Mike", "Michael", "Sarah", "David", "Lisa", "Chris", "Jessica",
+            "James", "Jennifer", "Robert", "Ashley", "Matthew", "Amanda", "Andrew", "Emily"
+        ]
+
+        words = speech.split()
+        potential_names = []
+
+        for i, word in enumerate(words):
+            # Skip obvious non-name words
+            if word.lower() in ['my', 'name', 'is', 'the', 'this', 'calling', 'speaking']:
+                continue
+
+            # Check fuzzy similarity with common names
+            for common_name in common_first_names:
+                similarity = fuzz.ratio(word.lower(), common_name.lower()) / 100
+                if similarity >= 0.75:  # 75% similarity threshold
+                    # Look for potential surname nearby
+                    if i + 1 < len(words):
+                        surname = words[i + 1]
+                        if len(surname) >= 2 and surname.isalpha():
+                            result = f"{common_name} {surname}".title()
+                            logger.info("[name_canadian] fuzzy match: '%s' -> %s (similarity: %.2f)", speech, result, similarity)
+                            return result
+                    break
+
+    except ImportError:
+        logger.debug("[name_canadian] rapidfuzz not available, skipping fuzzy matching")
+    except Exception as e:
+        logger.debug("[name_canadian] fuzzy matching failed: %s", e)
+
+    # Layer 4: spaCy NER (if available) with timeout protection
     nlp = _get_spacy()
     if nlp:
         try:
@@ -288,7 +481,7 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
             signal.alarm(0)  # Cancel timeout
             logger.debug("[name_canadian] spaCy failed: %s", e)
 
-    # LLM fallback if provided
+    # Layer 5: LLM fallback if provided
     if llm_fallback:
         try:
             llm_result = await llm_fallback(speech)

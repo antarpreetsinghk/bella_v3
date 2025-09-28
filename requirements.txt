@@ -20,9 +20,16 @@ boto3==1.34.0
 openai==1.3.7
 
 # Advanced Extraction Libraries (Essential only for fast performance)
-phonenumbers==8.13.26
+phonenumbers==8.13.50
 parsedatetime==2.6
 python-dateutil==2.8.2
+
+# Enhanced Extraction Libraries (Phase 1) - Installed ✅
+word2number==1.1                # Convert spelled numbers "four one six" -> "416"
+nameparser==1.1.3               # Better name parsing and validation
+dateparser==1.2.0               # Advanced natural language date parsing
+fuzzywuzzy==0.18.0              # Fuzzy string matching for names
+rapidfuzz>=3.8.0                # Faster fuzzy operations (compatible version)
 
 # Session Storage
 redis==5.0.1
