@@ -54,3 +54,22 @@ pgdata/
 # ---- Alembic ----
 alembic/versions/*.pyc
 alembic/versions/__pycache__/
+
+# ---- Test & Monitoring Files (never include in production) ----
+*test*.py
+*test*.json
+*monitor*.py
+*report*.md
+*debug*.py
+*setup*.py
+quick-test.sh
+start_*.sh
+*.html
+*.jsonl
+permanent_*.py
+live_*.py
+production_*.py
+real_*.py
+speech_*.py
+speech_*.html
+speech_*.jsonl
