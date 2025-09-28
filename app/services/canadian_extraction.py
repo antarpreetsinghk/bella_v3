@@ -338,9 +338,106 @@ async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[date
     return None
 
 
+def validate_canadian_name_context(speech: str, extracted_name: str) -> bool:
+    """
+    Validate if extracted name makes sense in Canadian multilingual context.
+    Prevents extraction of question words and appointment phrases.
+    """
+    if not extracted_name or len(extracted_name.strip()) < 2:
+        return False
+
+    extracted_lower = extracted_name.lower().strip()
+    speech_lower = speech.lower().strip()
+
+    # 1. MULTILINGUAL QUESTION WORD REJECTION
+    question_patterns = [
+        # English
+        'can you', 'could you', 'will you', 'would you', 'do you', 'are you',
+        'help me', 'assist me',
+        # French
+        'pouvez-vous', 'voulez-vous', 'est-ce que vous', 'aidez-moi',
+        # Mixed/Common
+        'book', 'schedule', 'make appointment', 'get appointment'
+    ]
+
+    for pattern in question_patterns:
+        if pattern in extracted_lower:
+            logger.debug("[name_validation] rejected question pattern: '%s' in '%s'", pattern, extracted_name)
+            return False
+
+    # 2. APPOINTMENT-RELATED PHRASES (MULTILINGUAL)
+    appointment_phrases = [
+        'appointment', 'rendez-vous', 'booking', 'réservation',
+        'schedule', 'horaire', 'time slot', 'créneau',
+        'meet', 'rencontre', 'visit', 'visite', 'consultation'
+    ]
+
+    for phrase in appointment_phrases:
+        if phrase in extracted_lower:
+            logger.debug("[name_validation] rejected appointment phrase: '%s' in '%s'", phrase, extracted_name)
+            return False
+
+    # 3. CANADIAN NAME CHARACTERISTICS VALIDATION
+    words = extracted_name.split()
+
+    # Must have 1-4 words (covers most Canadian naming conventions)
+    if not (1 <= len(words) <= 4):
+        logger.debug("[name_validation] rejected word count: %d words in '%s'", len(words), extracted_name)
+        return False
+
+    # At least one word should be capitalized or be a valid name
+    french_particles = ['de', 'du', 'des', 'la', 'le', 'saint', 'sainte', 'van', 'von', 'mc', 'mac']
+    has_proper_noun = False
+
+    for i, word in enumerate(words):
+        # French particles and prefixes can be lowercase if not first word
+        if i > 0 and word.lower() in french_particles:
+            continue
+        # Check if word is properly capitalized or is a valid name pattern
+        if word and (word[0].isupper() or word.lower() in french_particles):
+            has_proper_noun = True
+            break
+
+    if not has_proper_noun:
+        logger.debug("[name_validation] rejected no proper nouns: '%s'", extracted_name)
+        return False
+
+    # 4. CONTEXT VALIDATION - reject if extracted from obvious non-name context
+    # Check if the extracted name appears in a question context
+    question_contexts = [
+        'can you', 'could you', 'will you', 'would you', 'do you',
+        'hi can', 'hello can', 'hey can', 'excuse me can',
+        'pouvez-vous', 'voulez-vous'
+    ]
+
+    for context in question_contexts:
+        if context in speech_lower:
+            logger.debug("[name_validation] rejected question context: '%s' in speech", context)
+            return False
+
+    # 5. SPECIFIC PATTERN REJECTION - catch common false extractions
+    # If speech contains question words and the extracted name contains those words
+    question_word_patterns = ['can', 'you', 'will', 'do', 'hi', 'help', 'me', 'something', 'availability']
+    name_words = extracted_lower.split()
+
+    # If extracted name contains question words, it's likely a false positive
+    if any(word in question_word_patterns for word in name_words):
+        # Exception: allow if it's clearly after a name trigger
+        name_triggers = ['my name is', 'i am', 'this is', 'call me']
+        has_name_trigger = any(trigger in speech_lower for trigger in name_triggers)
+
+        if not has_name_trigger:
+            logger.debug("[name_validation] rejected question words in name: '%s'", extracted_name)
+            return False
+
+    logger.debug("[name_validation] accepted: '%s'", extracted_name)
+    return True
+
+
 async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]:
     """
     Enhanced Canadian name extraction with nameparser and fuzzy matching.
+    Now includes Canadian multilingual validation to prevent false extractions.
 
     Returns:
         Properly formatted "First Last" name or None
@@ -372,8 +469,13 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
             name = HumanName(cleaned)
             if name.first and name.last:
                 result = f"{name.first} {name.last}".title()
-                logger.info("[name_canadian] nameparser success: '%s' -> %s", speech, result)
-                return result
+
+                # CANADIAN MULTILINGUAL VALIDATION
+                if not validate_canadian_name_context(speech, result):
+                    logger.debug("[name_canadian] nameparser rejected by validation: '%s' -> %s", speech, result)
+                else:
+                    logger.info("[name_canadian] nameparser success: '%s' -> %s", speech, result)
+                    return result
 
             # Try with just the cleaned text if nameparser couldn't parse parts
             words = cleaned.split()
@@ -381,8 +483,12 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
                 # Take first two words as first and last name
                 result = f"{words[0]} {words[1]}".title()
                 if all(len(w) >= 2 and w.isalpha() for w in words[:2]):
-                    logger.info("[name_canadian] nameparser fallback: '%s' -> %s", speech, result)
-                    return result
+                    # CANADIAN MULTILINGUAL VALIDATION
+                    if not validate_canadian_name_context(speech, result):
+                        logger.debug("[name_canadian] nameparser fallback rejected by validation: '%s' -> %s", speech, result)
+                    else:
+                        logger.info("[name_canadian] nameparser fallback: '%s' -> %s", speech, result)
+                        return result
 
     except ImportError:
         logger.debug("[name_canadian] nameparser not available, using fallback")
@@ -409,6 +515,12 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
             match = re.search(pattern, speech, re.IGNORECASE)
             if match:
                 candidate = match.group(1).strip().replace(',', '').title()  # Remove commas
+
+                # CANADIAN MULTILINGUAL VALIDATION
+                if not validate_canadian_name_context(speech, candidate):
+                    logger.debug("[name_canadian] pattern rejected by validation: '%s' -> %s", speech, candidate)
+                    continue
+
                 # Simple validation - must have at least 2 words with 2+ chars each
                 words = candidate.split()
                 if len(words) >= 2 and all(len(w) >= 2 for w in words):
