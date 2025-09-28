@@ -83,6 +83,96 @@ def _openai_base_url() -> str:
 
 # ---------- Core call ----------
 
+async def clean_and_enhance_speech(raw_speech: str) -> str:
+    """
+    Clean and enhance Twilio speech input before processing.
+
+    Handles Canadian English variations, removes artifacts, expands contractions,
+    and standardizes format for better downstream processing.
+    """
+    if not raw_speech or not raw_speech.strip():
+        return raw_speech
+
+    # LLM toggle (env can be "true"/"false"/"1"/"0")
+    llm_enabled = str(os.getenv("LLM_ENABLED", "true")).lower() in {"1", "true", "yes", "on"}
+    if not llm_enabled:
+        # Simple fallback cleaning without LLM
+        cleaned = raw_speech.strip()
+        # Basic contractions
+        cleaned = re.sub(r"\bit's\b", "it is", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\bi'm\b", "i am", cleaned, flags=re.IGNORECASE)
+        return cleaned
+
+    base_url = _openai_base_url()
+    model = getattr(settings, "OPENAI_MODEL", None) or "gpt-4o-mini"
+    api_key = getattr(settings, "OPENAI_API_KEY", None)
+    if not api_key:
+        # Fallback to basic cleaning if no API key
+        cleaned = raw_speech.strip()
+        cleaned = re.sub(r"\bit's\b", "it is", cleaned, flags=re.IGNORECASE)
+        return cleaned
+
+    # Build cleaning prompt
+    system_prompt = (
+        "You are a speech cleaning assistant for Canadian voice systems. "
+        "Clean and standardize speech input while preserving all meaningful information. "
+        "Return ONLY the cleaned text, no explanations or formatting."
+    )
+
+    user_prompt = (
+        f"Clean this speech input from Twilio speech-to-text:\n\n"
+        f'"{raw_speech}"\n\n'
+        f"Tasks:\n"
+        f"1. Remove speech artifacts (um, uh, called her, etc.)\n"
+        f"2. Expand contractions (it's → it is, I'm → I am)\n"
+        f"3. Fix common Canadian speech patterns\n"
+        f"4. Handle bilingual patterns (French-English mixing)\n"
+        f"5. Standardize name introductions\n"
+        f"6. Add missing area codes if obvious (e.g., 869-5838 → 204-869-5838 for Manitoba)\n"
+        f"7. Preserve all meaningful content\n\n"
+        f"Examples:\n"
+        f'- "here, my name is antara, preet called her" → "my name is Antara Preet"\n'
+        f'- "It\'s Johnny Smith" → "It is Johnny Smith"\n'
+        f'- "Mon nom is Marie" → "My name is Marie"\n'
+        f'- "86952338" → "204-869-2338" (if clearly a Manitoba number)\n\n'
+        f"Return only the cleaned text:"
+    )
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.1,
+        "max_tokens": 200,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(base_url=base_url, timeout=10.0) as client:
+            resp = await client.post("/v1/chat/completions", headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            cleaned_text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
+
+            # Basic validation - if LLM returns something weird, use original
+            if cleaned_text and len(cleaned_text.strip()) > 0 and len(cleaned_text) < len(raw_speech) * 3:
+                return cleaned_text.strip()
+            else:
+                return raw_speech.strip()
+
+    except Exception as e:
+        # If LLM fails, return original with basic cleaning
+        cleaned = raw_speech.strip()
+        cleaned = re.sub(r"\bit's\b", "it is", cleaned, flags=re.IGNORECASE)
+        return cleaned
+
+
 async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
     """
     Single entrypoint for LLM extraction.

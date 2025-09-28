@@ -23,7 +23,7 @@ from app.services.canadian_extraction import (
 
 from app.db.session import get_session
 from app.services.redis_session import get_session as get_call_session, reset_session, save_session
-from app.services.llm import extract_appointment_fields
+from app.services.llm import extract_appointment_fields, clean_and_enhance_speech
 from app.services.booking import _parse_to_utc as parse_to_utc  # reuse future-only guard
 from app.crud.user import get_user_by_mobile, create_user
 from app.crud.appointment import create_appointment_unique
@@ -211,13 +211,40 @@ async def voice_collect(
     from_num_masked = _mask_phone(From)
     sess = get_call_session(CallSid)
 
+    # Clean and enhance speech using LLM before processing
+    cleaned_speech = speech
+    if speech:
+        try:
+            cleaned_speech = await clean_and_enhance_speech(speech)
+            logger.info(
+                "[speech_cleaning] call=%s original='%s' cleaned='%s'",
+                CallSid, speech, cleaned_speech
+            )
+            # Store speech data in session for analysis
+            sess.last_raw_speech = speech
+            sess.last_cleaned_speech = cleaned_speech
+            sess.speech_history.append({
+                "timestamp": sess.updated_at.isoformat(),
+                "step": sess.step,
+                "raw": speech,
+                "cleaned": cleaned_speech
+            })
+            save_session(sess)
+        except Exception as e:
+            logger.warning("[speech_cleaning] failed: %s, using original", e)
+            cleaned_speech = speech
+            # Still store the original speech
+            sess.last_raw_speech = speech
+            sess.last_cleaned_speech = speech
+            save_session(sess)
+
     logger.info(
         "[collect] call=%s step=%s from=%s speech=%s",
-        CallSid, sess.step, from_num_masked, speech if speech else "<empty>",
+        CallSid, sess.step, from_num_masked, cleaned_speech if cleaned_speech else "<empty>",
     )
 
     # If nothing heard, gently reprompt the current step
-    if not speech:
+    if not cleaned_speech:
         polite = {
             "ask_name": "I'm sorry—I didn't catch that. Could you please tell me your full name?",
             "confirm_name": "I'm sorry—I didn't catch that. Please say Yes if the name is correct, or No if it's wrong.",
@@ -235,14 +262,14 @@ async def voice_collect(
     extracted_info = {}
     if sess.step in ["ask_name", "ask_mobile", "ask_time"]:
         try:
-            ex = await extract_appointment_fields(speech)
+            ex = await extract_appointment_fields(cleaned_speech)
             exd = ex.model_dump()
             extracted_info = {
                 "name": exd.get("full_name"),
                 "mobile": exd.get("mobile"),
                 "time": exd.get("starts_at")
             }
-            logger.info("[llm_extract] step=%s speech='%s' extracted=%s", sess.step, speech, extracted_info)
+            logger.info("[llm_extract] step=%s speech='%s' extracted=%s", sess.step, cleaned_speech, extracted_info)
         except Exception as e:
             logger.warning("[llm_extract] failed: %s", e)
 
@@ -258,15 +285,15 @@ async def voice_collect(
             except:
                 return None
 
-        extracted_name = await extract_canadian_name(speech, llm_name_fallback)
+        extracted_name = await extract_canadian_name(cleaned_speech, llm_name_fallback)
 
         # Also try LLM extracted name from earlier if direct extraction failed
         if not extracted_name and extracted_info.get("name"):
             extracted_name = await extract_canadian_name(extracted_info["name"])
 
         # Fallback to treating entire speech as name if extraction fails
-        sess.data["full_name"] = extracted_name or " ".join(speech.split())
-        logger.info("[ask_name] final name: '%s' (from speech: '%s')", sess.data["full_name"], speech)
+        sess.data["full_name"] = extracted_name or " ".join(cleaned_speech.split())
+        logger.info("[ask_name] final name: '%s' (from speech: '%s')", sess.data["full_name"], cleaned_speech)
 
         # Move to name confirmation step
         sess.step = "confirm_name"
@@ -278,8 +305,8 @@ async def voice_collect(
 </Response>""")
 
     if sess.step == "confirm_name":
-        logger.info("[confirm_name] processing speech: '%s'", speech)
-        speech_lower = speech.lower().strip()
+        logger.info("[confirm_name] processing speech: '%s'", cleaned_speech)
+        speech_lower = cleaned_speech.lower().strip()
 
         # Check for positive confirmation (flexible matching)
         if any(word in speech_lower for word in ["yes", "yeah", "yep", "correct", "right"]):
@@ -310,7 +337,7 @@ async def voice_collect(
 </Response>""")
 
     if sess.step == "ask_mobile":
-        logger.info("[ask_mobile] processing speech: '%s'", speech)
+        logger.info("[ask_mobile] processing speech: '%s'", cleaned_speech)
 
         # CANADIAN OPTIMIZED: Try fast extraction with LLM fallback
         async def llm_phone_fallback(text):
@@ -320,7 +347,7 @@ async def voice_collect(
             except:
                 return None
 
-        norm = await extract_canadian_phone(speech, llm_phone_fallback)
+        norm = await extract_canadian_phone(cleaned_speech, llm_phone_fallback)
 
         # Also try LLM extracted mobile from earlier if direct extraction failed
         if not norm and extracted_info.get("mobile"):
@@ -328,13 +355,13 @@ async def voice_collect(
             logger.info("[ask_mobile] used LLM extracted mobile: '%s' -> '%s'", extracted_info["mobile"], norm)
 
         if not norm:
-            logger.warning("[ask_mobile] both fast and LLM extraction failed for: '%s'", speech)
+            logger.warning("[ask_mobile] both fast and LLM extraction failed for: '%s'", cleaned_speech)
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 {_gather_block("Sorry, I didn't catch that. Can you say your phone number again?")}
 </Response>""")
 
-        logger.info("[ask_mobile] normalized '%s' -> '%s', advancing to ask_time", speech, norm)
+        logger.info("[ask_mobile] normalized '%s' -> '%s', advancing to ask_time", cleaned_speech, norm)
         sess.data["mobile"] = norm
         sess.step = "ask_time"
         save_session(sess)  # Persist state change
@@ -345,7 +372,7 @@ async def voice_collect(
 </Response>""")
 
     if sess.step == "ask_time":
-        logger.info("[ask_time] processing speech: '%s'", speech)
+        logger.info("[ask_time] processing speech: '%s'", cleaned_speech)
         # CANADIAN OPTIMIZED: Try fast time extraction with LLM fallback
         async def llm_time_fallback(text):
             try:
@@ -354,7 +381,7 @@ async def voice_collect(
             except:
                 return None
 
-        starts_at_utc = await extract_canadian_time(speech, llm_time_fallback)
+        starts_at_utc = await extract_canadian_time(cleaned_speech, llm_time_fallback)
 
         # Also try LLM extracted time from earlier if direct extraction failed
         if not starts_at_utc and extracted_info.get("time"):
@@ -367,7 +394,7 @@ async def voice_collect(
 {_gather_block("I didn't catch that. Could you please say a specific date and time, like next Tuesday at 2 PM?")}
 </Response>""")
 
-        logger.info("[ask_time] parsed time '%s' -> %s", speech, starts_at_utc)
+        logger.info("[ask_time] parsed time '%s' -> %s", cleaned_speech, starts_at_utc)
 
         if HAVE_BH:
             local_candidate = starts_at_utc.astimezone(LOCAL_TZ)
@@ -392,7 +419,7 @@ async def voice_collect(
 </Response>""")
 
     if sess.step == "confirm":
-        ans = speech.lower()
+        ans = cleaned_speech.lower()
         if any(k in ans for k in ["yes", "yeah", "yup", "confirm", "book", "sure"]):
             try:
                 full_name = sess.data.get("full_name")
@@ -419,7 +446,7 @@ async def voice_collect(
                     user_id=user.id,
                     starts_at_utc=starts_at_utc,
                     duration_min=int(sess.data.get("duration_min") or 30),
-                    notes=speech if sess.data.get("notes") is None else sess.data.get("notes"),
+                    notes=cleaned_speech if sess.data.get("notes") is None else sess.data.get("notes"),
                 )
                 when = appt.starts_at.astimezone(LOCAL_TZ).strftime("%A, %B %d at %I:%M %p")
                 reset_session(CallSid)
@@ -459,7 +486,7 @@ async def voice_collect(
         summary = _summary(sess.data)
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(f"I heard: {speech}. Should I book {summary}? Please say Yes or No.")}
+{_gather_block(f"I heard: {cleaned_speech}. Should I book {summary}? Please say Yes or No.")}
 </Response>""")
 
     # Fallback: reset to first step

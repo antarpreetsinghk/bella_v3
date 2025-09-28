@@ -1,0 +1,23 @@
+{
+  "timestamp": "2025-09-28T09:04:48.722636",
+  "base_url": "https://bella-alb-1924818779.ca-central-1.elb.amazonaws.com",
+  "overall_status": "error",
+  "total_time": 0.2992396354675293,
+  "checks": [
+    {
+      "endpoint": "health",
+      "status": "error",
+      "error": "All connection attempts failed"
+    },
+    {
+      "endpoint": "voice",
+      "status": "error",
+      "error": "All connection attempts failed"
+    },
+    {
+      "endpoint": "voice_flow",
+      "status": "error",
+      "error": "All connection attempts failed"
+    }
+  ]
+}

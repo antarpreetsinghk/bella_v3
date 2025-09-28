@@ -22,6 +22,10 @@ class CallSession:
     step: str = "ask_name"   # ask_name -> ask_mobile -> ask_time -> confirm
     data: Dict[str, Any] = field(default_factory=lambda: {"duration_min": 30})
     updated_at: datetime = field(default_factory=lambda: datetime.utcnow())
+    # Speech tracking for debugging and analysis
+    last_raw_speech: Optional[str] = None      # Original Twilio speech
+    last_cleaned_speech: Optional[str] = None  # LLM-cleaned speech
+    speech_history: list = field(default_factory=list)  # Track speech cleaning over time
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for Redis storage"""
