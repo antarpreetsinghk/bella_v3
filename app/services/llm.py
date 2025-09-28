@@ -173,22 +173,24 @@ async def clean_and_enhance_speech(raw_speech: str) -> str:
         return cleaned
 
 
-async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
+async def unified_appointment_extraction(raw_speech: str, conversation_context: str = "") -> ExtractedAppointment:
     """
-    Single entrypoint for LLM extraction.
+    UNIFIED LLM approach: Clean speech + extract appointment in ONE call.
 
-    Behavior:
-      - If LLM_ENABLED=false (env), returns a safe placeholder (good for CI).
-      - If enabled and OPENAI_API_KEY missing -> raises with a clear error.
-      - Otherwise calls OpenAI and validates output.
+    This replaces the multi-step process (clean_and_enhance_speech + extract_appointment_fields)
+    with a single smart LLM call that handles everything:
+    - Speech cleaning and artifact removal
+    - Intelligent name matching (Interpret → Antarpreet)
+    - Phone number normalization to E.164
+    - Natural language date parsing to ISO8601
+    - Canadian context awareness
     """
-    if not transcript or not transcript.strip():
-        raise ValueError("Transcript is empty.")
+    if not raw_speech or not raw_speech.strip():
+        raise ValueError("Raw speech is empty.")
 
     # LLM toggle (env can be "true"/"false"/"1"/"0")
     llm_enabled = str(os.getenv("LLM_ENABLED", "true")).lower() in {"1", "true", "yes", "on"}
     if not llm_enabled:
-        # Safe CI/dev fallback: no network, no key needed
         return ExtractedAppointment(
             full_name=None,
             mobile=None,
@@ -205,13 +207,49 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set but LLM is enabled. Set LLM_ENABLED=false to disable in CI.")
 
-    max_output_tokens = int(getattr(settings, "RESPONSE_MAX_TOKENS", 512))
+    # Build unified extraction prompt
+    system_prompt = (
+        "You are a Canadian dental appointment booking assistant. Extract appointment details from "
+        "potentially noisy Twilio speech-to-text input. You must clean the speech AND extract data in one step.\n\n"
+        "Return ONLY a JSON object with these exact fields:\n"
+        '{"full_name": string|null, "mobile": string|null, "starts_at": string|null, '
+        '"duration_min": number|null, "notes": string|null, "missing": string[], "confidence": number|null}'
+    )
+
+    user_prompt = (
+        f"RAW SPEECH FROM TWILIO: '{raw_speech}'\n"
+        f"CONVERSATION CONTEXT: {conversation_context}\n\n"
+        f"TASKS (all in one step):\n"
+        f"1. CLEAN SPEECH: Remove artifacts (um, uh, called her), expand contractions (it's→it is)\n"
+        f"2. INTELLIGENT NAME MATCHING: Common misheard Canadian names:\n"
+        f"   - 'Interpret' or 'interpreter' → likely 'Antarpreet'\n"
+        f"   - 'Until Preet' or 'under preet' → likely 'Antarpreet'\n"
+        f"   - 'An Interpret' → likely 'Antarpreet'\n"
+        f"   - Consider phonetic similarities for South Asian/Canadian names\n"
+        f"3. PHONE NORMALIZATION: Convert to E.164 format (+1 for Canada)\n"
+        f"   - Add area code 204 for Manitoba if missing (7-digit numbers)\n"
+        f"   - Clean digits, remove formatting\n"
+        f"4. DATE PARSING: Convert natural language to ISO8601 (YYYY-MM-DDTHH:MM:SS+00:00)\n"
+        f"   - 'tomorrow at 2pm' → calculate actual date\n"
+        f"   - 'Saturday' → next Saturday\n"
+        f"   - Default timezone: America/Edmonton (MDT/MST)\n"
+        f"5. VALIDATION: Only extract if reasonably confident\n\n"
+        f"EXAMPLES:\n"
+        f"Input: 'interpret calling for 2pm tomorrow, 204-555-1234'\n"
+        f"Output: {{'full_name': 'Antarpreet', 'mobile': '+12045551234', 'starts_at': '2025-09-29T20:00:00+00:00', 'duration_min': 30, 'notes': null, 'missing': [], 'confidence': 0.9}}\n\n"
+        f"Input: 'my name is until preet, 8695838'\n"
+        f"Output: {{'full_name': 'Antarpreet', 'mobile': '+12048695838', 'starts_at': null, 'duration_min': 30, 'notes': null, 'missing': ['starts_at'], 'confidence': 0.8}}\n\n"
+        f"Return ONLY the JSON object:"
+    )
 
     payload = {
         "model": model,
-        "messages": _build_messages(transcript),
-        "temperature": 0,
-        "max_tokens": max_output_tokens,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.1,
+        "max_tokens": 300,
         "response_format": {"type": "json_object"},
     }
 
@@ -220,7 +258,7 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=15.0) as client:
         resp = await client.post("/v1/chat/completions", headers=headers, json=payload)
         resp.raise_for_status()
         data = resp.json()
@@ -228,6 +266,7 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
         obj = _coerce_json(text)
 
         if not obj:
+            # Retry without JSON mode if parsing fails
             retry_payload = {**payload}
             retry_payload.pop("response_format", None)
             resp2 = await client.post("/v1/chat/completions", headers=headers, json=retry_payload)
@@ -236,6 +275,7 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
             text2 = (data2.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
             obj = _coerce_json(text2)
 
+    # Ensure all required fields exist
     obj.setdefault("full_name", None)
     obj.setdefault("mobile", None)
     obj.setdefault("starts_at", None)
@@ -247,6 +287,7 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
     try:
         parsed = ExtractedAppointment(**obj)
     except ValidationError as ve:
+        # Fallback to minimal valid structure
         minimal = {
             "full_name": obj.get("full_name"),
             "mobile": obj.get("mobile"),
@@ -259,9 +300,17 @@ async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
         try:
             parsed = ExtractedAppointment(**minimal)
         except Exception as inner:
-            raise RuntimeError(f"LLM extraction validation failed: {ve}") from inner
+            raise RuntimeError(f"Unified LLM extraction failed: {ve}") from inner
 
     return parsed
+
+
+async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
+    """
+    LEGACY function - kept for backward compatibility.
+    Now delegates to unified_appointment_extraction.
+    """
+    return await unified_appointment_extraction(transcript)
 
 
 # ---------- Simple CLI for local dev (optional) ----------
