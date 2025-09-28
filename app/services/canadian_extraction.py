@@ -232,12 +232,15 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
     speech = speech.strip()
     logger.info("[name_canadian] processing: '%s'", speech)
 
-    # Fast pattern matching for Canadian name patterns (no heavy dependencies)
+    # Enhanced patterns for Canadian name extraction - handle speech-to-text punctuation
     patterns = [
-        r"(?:my (?:full )?name is|i'm|this is|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
-        r"(?:my (?:full )?name is|i'm|this is|i am)\s+([a-z]+(?:\s+[a-z]+)+)",  # lowercase
-        r"(?:my (?:full )?name is|i'm|this is|i am)\s+([A-Z][a-z]+,?\s+[A-Z][a-z]+)",  # Handle comma
-        r"(?:my (?:full )?name is|i'm|this is|i am)\s+([a-z]+,?\s+[a-z]+)",  # Handle comma lowercase
+        # Enhanced patterns that handle periods, commas, and extra spaces after trigger phrases
+        r"(?:my (?:full )?name is)[.\s,]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+        r"(?:my (?:full )?name is)[.\s,]*([a-z]+(?:\s+[a-z]+)+)",  # lowercase
+        r"(?:i'm|this is|i am)[.\s,]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+        r"(?:i'm|this is|i am)[.\s,]*([a-z]+(?:\s+[a-z]+)+)",  # lowercase
+        r"(?:my (?:full )?name is)[.\s,]*([A-Z][a-z]+,?\s+[A-Z][a-z]+)",  # Handle comma in name
+        r"(?:my (?:full )?name is)[.\s,]*([a-z]+,?\s+[a-z]+)",  # Handle comma lowercase
         r"^([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s+calling|$|\s*$)",
         r"^([a-z]+\s+[a-z]+)(?:\s+calling|$|\s*$)",  # lowercase
         r"([A-Z][a-z]+\s+[A-Z][a-z]+)",  # Simple pattern
