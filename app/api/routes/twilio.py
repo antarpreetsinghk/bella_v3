@@ -219,10 +219,11 @@ async def voice_collect(
     # If nothing heard, gently reprompt the current step
     if not speech:
         polite = {
-            "ask_name": "I’m sorry—I didn’t catch that. Could you please tell me your full name?",
-            "ask_mobile": "I’m sorry—I didn’t catch that. Could you please say your phone number, digit by digit?",
-            "ask_time": "I’m sorry—I didn’t catch that. Could you please say the exact date and time you’d like?",
-            "confirm": "I’m sorry—I didn’t catch that. Should I book it? Please say Yes or No.",
+            "ask_name": "I'm sorry—I didn't catch that. Could you please tell me your full name?",
+            "confirm_name": "I'm sorry—I didn't catch that. Please say Yes if the name is correct, or No if it's wrong.",
+            "ask_mobile": "I'm sorry—I didn't catch that. Could you please say your phone number, digit by digit?",
+            "ask_time": "I'm sorry—I didn't catch that. Could you please say the exact date and time you'd like?",
+            "confirm": "I'm sorry—I didn't catch that. Should I book it? Please say Yes or No.",
         }[sess.step]
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -267,13 +268,43 @@ async def voice_collect(
         sess.data["full_name"] = extracted_name or " ".join(speech.split())
         logger.info("[ask_name] final name: '%s' (from speech: '%s')", sess.data["full_name"], speech)
 
-        # Always proceed to ask_mobile step (no smart jumping)
-        sess.step = "ask_mobile"
+        # Move to name confirmation step
+        sess.step = "confirm_name"
         save_session(sess)  # Persist state change
         logger.info("[session_debug] after ask_name step=%s data=%s", sess.step, sess.data)
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
+{_gather_block(f"I heard '{sess.data['full_name']}'. Is that correct? Please say Yes or No.")}
+</Response>""")
+
+    if sess.step == "confirm_name":
+        logger.info("[confirm_name] processing speech: '%s'", speech)
+        speech_lower = speech.lower().strip()
+
+        if speech_lower in ["yes", "yeah", "yep", "correct", "right", "that's right"]:
+            # Name confirmed, proceed to phone
+            sess.step = "ask_mobile"
+            save_session(sess)
+            logger.info("[confirm_name] name confirmed: '%s'", sess.data["full_name"])
+            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
 {_gather_block("Perfect! What's your phone number?")}
+</Response>""")
+        elif speech_lower in ["no", "nope", "wrong", "incorrect", "that's wrong"]:
+            # Name incorrect, ask again
+            sess.step = "ask_name"
+            sess.data.pop("full_name", None)  # Clear the incorrect name
+            save_session(sess)
+            logger.info("[confirm_name] name rejected, asking again")
+            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+{_gather_block("Let me get that right. Please say your full name again, speaking slowly and clearly.")}
+</Response>""")
+        else:
+            # Unclear response, ask for clarification
+            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+{_gather_block(f"I heard '{sess.data['full_name']}'. Please say Yes if that's correct, or No if it's wrong.")}
 </Response>""")
 
     if sess.step == "ask_mobile":
