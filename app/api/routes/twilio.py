@@ -17,7 +17,8 @@ from phonenumbers import PhoneNumberFormat
 from app.services.canadian_extraction import (
     extract_canadian_phone,
     extract_canadian_time,
-    extract_canadian_name
+    extract_canadian_name,
+    format_phone_for_speech
 )
 
 from app.db.session import get_session
@@ -158,7 +159,8 @@ def _normalize_phone_for_ca_us(raw: str) -> str | None:
 
 def _summary(sess_data: dict) -> str:
     name = sess_data.get("full_name") or "Unknown"
-    mobile = sess_data.get("mobile") or "Unknown"
+    mobile_raw = sess_data.get("mobile") or "Unknown"
+    mobile = format_phone_for_speech(mobile_raw) if mobile_raw != "Unknown" else "Unknown"
     when_local = "Unknown"
     if sess_data.get("starts_at_utc"):
         when_local = sess_data["starts_at_utc"].astimezone(LOCAL_TZ).strftime("%A, %B %d at %I:%M %p")

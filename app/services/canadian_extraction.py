@@ -167,6 +167,42 @@ async def extract_canadian_phone(speech: str, llm_fallback=None) -> Optional[str
     return None
 
 
+def format_phone_for_speech(phone: str) -> str:
+    """
+    Format phone number for clear speech synthesis.
+    Converts +12048694905 → '204 869 4905' for natural pronunciation.
+
+    Args:
+        phone: Phone number in E.164 format (+12048694905) or other formats
+
+    Returns:
+        Formatted phone number optimized for speech (e.g., "204 869 4905")
+    """
+    if not phone or phone == "Unknown":
+        return phone
+
+    # Remove all non-digits
+    digits_only = re.sub(r'\D', '', phone)
+
+    # Handle North American numbers (11 digits starting with 1)
+    if len(digits_only) == 11 and digits_only.startswith('1'):
+        # Remove country code 1, format as XXX XXX XXXX
+        area_code = digits_only[1:4]
+        exchange = digits_only[4:7]
+        number = digits_only[7:11]
+        return f"{area_code} {exchange} {number}"
+
+    # Handle 10-digit North American numbers (missing country code)
+    elif len(digits_only) == 10:
+        area_code = digits_only[0:3]
+        exchange = digits_only[3:6]
+        number = digits_only[6:10]
+        return f"{area_code} {exchange} {number}"
+
+    # For other formats, return original (international numbers, etc.)
+    return phone
+
+
 async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[datetime]:
     """
     Enhanced Canadian time extraction with dateparser and advanced preprocessing.
