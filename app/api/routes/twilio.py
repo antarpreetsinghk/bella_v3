@@ -245,21 +245,19 @@ async def voice_collect(
                 cache_ttl=1800  # 30 minutes cache
             )
 
-            # Step 2: Use specialized extractors based on conversation step
+            # Step 2: TEMPORARY - Use simple fallbacks for speed
             if sess.step == "ask_name":
-                # Use nameparser for name extraction
-                extracted_name = extract_canadian_name(cleaned_speech)
-                extracted_info["name"] = extracted_name
+                # Simple name extraction - just use cleaned speech
+                extracted_info["name"] = cleaned_speech.strip()
 
             elif sess.step == "ask_mobile":
-                # Use phonenumbers library for phone extraction
-                extracted_phone = extract_canadian_phone(cleaned_speech)
+                # Use existing fast phone extraction
+                extracted_phone = _extract_phone_fast(cleaned_speech)
                 extracted_info["mobile"] = extracted_phone
 
             elif sess.step == "ask_time":
-                # Use duckling/dateparser for time extraction
-                extracted_time = extract_canadian_time(cleaned_speech)
-                extracted_info["time"] = extracted_time
+                # Simple time fallback - store as text for now
+                extracted_info["time"] = cleaned_speech.strip()
 
             # Store speech processing history
             sess.last_raw_speech = speech
