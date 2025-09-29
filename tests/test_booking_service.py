@@ -274,10 +274,10 @@ class TestBookingService:
             from_number="+14165551234"  # Use caller ID
         )
 
-        # Should still fail due to phone validation, but from_number should be used
-        assert result.created is False
-        # The normalized phone should show the from_number was attempted
-        assert result.echo['normalized']['mobile'] is None
+        # Should succeed because from_number provides valid fallback for missing mobile
+        assert result.created is True
+        # The normalized phone should show the from_number was used successfully
+        assert result.echo['normalized']['mobile'] == '+14165551234'
 
     @pytest.mark.asyncio
     @patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock)
@@ -307,7 +307,10 @@ class TestBookingUtilityFunctions:
     """Test booking utility functions"""
 
     @pytest.mark.asyncio
-    async def test_booking_with_different_locales(self, mock_db_session):
+    @patch('app.services.booking.get_user_by_mobile', new_callable=AsyncMock)
+    @patch('app.services.booking.create_user', new_callable=AsyncMock)
+    @patch('app.services.booking.create_appointment_unique', new_callable=AsyncMock)
+    async def test_booking_with_different_locales(self, mock_create_appt, mock_create_user, mock_get_user, mock_db_session):
         """Test booking with different locale settings"""
         with patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock) as mock_extract:
             mock_extracted = MagicMock()
@@ -320,13 +323,32 @@ class TestBookingUtilityFunctions:
             }
             mock_extract.return_value = mock_extracted
 
+            # Mock user lookup - not found
+            mock_get_user.return_value = None
+
+            # Mock user creation
+            mock_user = MagicMock()
+            mock_user.id = 123
+            mock_user.full_name = 'Jean Dupont'
+            mock_user.mobile = '+15145551234'
+            mock_create_user.return_value = mock_user
+
+            # Mock appointment creation
+            mock_appointment = MagicMock()
+            mock_appointment.id = 456
+            mock_appointment.starts_at = datetime(2025, 9, 30, 18, 0, 0, tzinfo=UTC)
+            mock_appointment.duration_min = 30
+            mock_appointment.notes = 'Rendez-vous régulier'
+            mock_create_appt.return_value = mock_appointment
+
             result = await book_from_transcript(
                 mock_db_session,
                 transcript="Jean Dupont, demain à 14h, 514-555-1234",
                 locale="fr-CA"
             )
 
-            # Should still fail due to missing mocks, but locale should be passed
+            # Should succeed with proper mocking and locale should be passed
+            assert result.created is True
             mock_extract.assert_called_once()
 
     def test_booking_result_structure(self):
