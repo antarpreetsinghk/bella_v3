@@ -34,7 +34,7 @@ class ErrorPattern:
     def _generate_fingerprint(self) -> str:
         """Generate unique fingerprint for error deduplication."""
         content = f"{self.error_type}:{self.message}:{self.context.get('endpoint', '')}"
-        return hashlib.md5(content.encode()).hexdigest()[:8]
+        return hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()[:8]  # Safe for error correlation
 
     def update(self):
         """Update last seen time and increment count."""
