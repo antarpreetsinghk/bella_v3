@@ -35,7 +35,7 @@ class TestBookingService:
     """Test booking service functionality"""
 
     @pytest.mark.asyncio
-    @patch('app.services.booking.extract_appointment_fields')
+    @patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock)
     @patch('app.services.booking.get_user_by_mobile')
     @patch('app.services.booking.create_user')
     @patch('app.services.booking.create_appointment_unique')
@@ -45,7 +45,7 @@ class TestBookingService:
         mock_get_user, mock_extract, mock_db_session
     ):
         """Test successful booking for a new user"""
-        # Mock LLM extraction
+        # Mock LLM extraction (async function)
         mock_extracted = MagicMock()
         mock_extracted.model_dump.return_value = {
             'full_name': 'John Smith',
@@ -95,7 +95,7 @@ class TestBookingService:
         assert 'calendar_event' in result.echo
 
     @pytest.mark.asyncio
-    @patch('app.services.booking.extract_appointment_fields')
+    @patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock)
     async def test_booking_missing_phone(self, mock_extract, mock_db_session):
         """Test booking with missing phone number"""
         # Mock LLM extraction - missing phone
@@ -119,7 +119,7 @@ class TestBookingService:
         assert "mobile" in result.echo['missing']
 
     @pytest.mark.asyncio
-    @patch('app.services.booking.extract_appointment_fields')
+    @patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock)
     async def test_booking_missing_time(self, mock_extract, mock_db_session):
         """Test booking with missing time"""
         # Mock LLM extraction - missing time
@@ -143,7 +143,7 @@ class TestBookingService:
         assert "starts_at" in result.echo['missing']
 
     @pytest.mark.asyncio
-    @patch('app.services.booking.extract_appointment_fields')
+    @patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock)
     @patch('app.services.booking.get_user_by_mobile')
     @patch('app.services.booking.create_appointment_unique')
     async def test_booking_duplicate_appointment(
@@ -181,7 +181,7 @@ class TestBookingService:
         assert "error" in result.echo
 
     @pytest.mark.asyncio
-    @patch('app.services.booking.extract_appointment_fields')
+    @patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock)
     @patch('app.services.booking.get_user_by_mobile')
     @patch('app.services.booking.create_user')
     @patch('app.services.booking.create_appointment_unique')
@@ -232,7 +232,7 @@ class TestBookingService:
         assert 'calendar_event' not in result.echo
 
     @pytest.mark.asyncio
-    @patch('app.services.booking.extract_appointment_fields')
+    @patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock)
     async def test_booking_with_caller_id_fallback(self, mock_extract, mock_db_session):
         """Test booking using caller ID as phone fallback"""
         # Mock LLM extraction - missing phone in transcript
@@ -258,7 +258,7 @@ class TestBookingService:
         assert result.echo['normalized']['mobile'] is None
 
     @pytest.mark.asyncio
-    @patch('app.services.booking.extract_appointment_fields')
+    @patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock)
     async def test_booking_invalid_time_format(self, mock_extract, mock_db_session):
         """Test booking with invalid time format"""
         # Mock LLM extraction - invalid time
