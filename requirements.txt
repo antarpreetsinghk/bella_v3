@@ -44,3 +44,7 @@ google-auth-httplib2==0.1.0
 pytest==7.4.3
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
+
+# Security Tools
+safety==3.6.2
+bandit==1.8.6

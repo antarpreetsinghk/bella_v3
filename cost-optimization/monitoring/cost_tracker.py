@@ -39,11 +39,41 @@ class AWSCostTracker:
     """Track AWS costs using Cost Explorer API"""
 
     def __init__(self):
-        self.cost_explorer = boto3.client('ce')
-        self.cloudwatch = boto3.client('cloudwatch')
+        try:
+            self.cost_explorer = boto3.client('ce')
+            self.cloudwatch = boto3.client('cloudwatch')
+
+            # Test if Cost Explorer is actually available
+            test_end = datetime.now()
+            test_start = test_end - timedelta(days=1)
+            self.cost_explorer.get_cost_and_usage(
+                TimePeriod={
+                    'Start': test_start.strftime('%Y-%m-%d'),
+                    'End': test_end.strftime('%Y-%m-%d')
+                },
+                Granularity='DAILY',
+                Metrics=['BlendedCost']
+            )
+            self.aws_available = True
+            logger.info("AWS Cost Explorer access verified")
+        except Exception as e:
+            logger.warning(f"AWS Cost Explorer not available: {e}")
+            self.cost_explorer = None
+            self.cloudwatch = None
+            self.aws_available = False
 
     def get_monthly_costs(self, start_date: datetime = None) -> Dict[str, Decimal]:
         """Get current month costs by service"""
+        if not self.aws_available:
+            logger.info("AWS Cost Explorer not available, returning mock data")
+            return {
+                'Amazon Elastic Compute Cloud - Compute': Decimal('45.00'),
+                'Amazon Relational Database Service': Decimal('20.00'),
+                'Amazon ElastiCache': Decimal('15.00'),
+                'Amazon Elastic Load Balancing': Decimal('25.00'),
+                'Data Transfer': Decimal('5.00')
+            }
+
         if start_date is None:
             start_date = datetime.now().replace(day=1)
 
@@ -80,6 +110,19 @@ class AWSCostTracker:
 
     def get_daily_costs(self, days: int = 7) -> List[CostMetric]:
         """Get daily costs for the last N days"""
+        if not self.aws_available:
+            logger.info("AWS Cost Explorer not available, returning mock daily costs")
+            costs = []
+            for i in range(days):
+                date = datetime.now() - timedelta(days=i)
+                costs.append(CostMetric(
+                    service='Total',
+                    amount=Decimal(str(3.5 + (i * 0.2))),  # Mock varying daily costs
+                    unit='USD',
+                    timestamp=date
+                ))
+            return costs
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
 
@@ -226,27 +269,33 @@ class CostAlertManager:
     def send_cost_alerts(self, alerts: List[CostAlert]):
         """Send cost alerts via CloudWatch metrics and logs"""
         for alert in alerts:
-            # Send CloudWatch metric
-            self.cost_tracker.cloudwatch.put_metric_data(
-                Namespace='BellaV3/CostAlerts',
-                MetricData=[
-                    {
-                        'MetricName': f'CostAlert_{alert.service}',
-                        'Value': float(alert.current_cost),
-                        'Unit': 'None',
-                        'Dimensions': [
+            # Send CloudWatch metric (if available)
+            if self.cost_tracker.cloudwatch:
+                try:
+                    self.cost_tracker.cloudwatch.put_metric_data(
+                        Namespace='BellaV3/CostAlerts',
+                        MetricData=[
                             {
-                                'Name': 'Service',
-                                'Value': alert.service
-                            },
-                            {
-                                'Name': 'Severity',
-                                'Value': alert.severity
+                                'MetricName': f'CostAlert_{alert.service}',
+                                'Value': float(alert.current_cost),
+                                'Unit': 'None',
+                                'Dimensions': [
+                                    {
+                                        'Name': 'Service',
+                                        'Value': alert.service
+                                    },
+                                    {
+                                        'Name': 'Severity',
+                                        'Value': alert.severity
+                                    }
+                                ]
                             }
                         ]
-                    }
-                ]
-            )
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send CloudWatch metric: {e}")
+            else:
+                logger.info("CloudWatch not available, skipping metric")
 
             # Log alert
             logger.warning(
@@ -347,6 +396,25 @@ class CostOptimizationRecommendations:
         monthly_costs = self.cost_tracker.get_monthly_costs()
         usage_report = self.usage_tracker.get_usage_report()
 
+        # Add general recommendations if AWS data is not available
+        if not self.cost_tracker.aws_available:
+            recommendations['immediate'].extend([
+                "Enable AWS Cost Explorer to get real cost data and personalized recommendations",
+                "Set up cost monitoring dashboard with proper AWS permissions",
+                "Implement caching for LLM responses to reduce API costs"
+            ])
+            recommendations['short_term'].extend([
+                "Configure AWS Cost and Billing alerts for budget monitoring",
+                "Evaluate reserved instances for consistent workloads (potential 30-40% savings)",
+                "Set up auto-scaling to optimize compute costs"
+            ])
+            recommendations['long_term'].extend([
+                "Consider Aurora Serverless for variable database workloads",
+                "Implement intelligent cost-aware feature flags",
+                "Evaluate spot instances for development environments"
+            ])
+            return recommendations
+
         # Analyze infrastructure costs
         total_monthly = sum(monthly_costs.values())
 
@@ -394,8 +462,12 @@ class CostOptimizationRecommendations:
         usage_report = self.usage_tracker.get_usage_report()
         recommendations = self.analyze_costs()
 
+        # Add note about AWS availability
+        aws_status = "connected" if self.cost_tracker.aws_available else "not_available"
+
         return {
             'timestamp': datetime.now().isoformat(),
+            'aws_status': aws_status,
             'monthly_costs': {k: float(v) for k, v in monthly_costs.items()},
             'daily_costs': [
                 {
