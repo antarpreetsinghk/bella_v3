@@ -31,6 +31,12 @@ jobs:
         echo "🚀 Production code ready"
         
     - name: Health check test
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_DB: test_db
+        POSTGRES_USER: test_user
+        POSTGRES_PASSWORD: test_pass
+        BELLA_API_KEY: test_key
       run: |
         echo "🔍 Testing application startup..."
         python -c "from app.main import app; print('✅ App imports successfully')"
