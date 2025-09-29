@@ -139,7 +139,7 @@ EOF
           # ---- App ----
           APP_ENV=ci
           LLM_ENABLED=false
-          BELLA_API_KEY=ci-key-not-used
+          BELLA_API_KEY=${{ secrets.BELLA_API_KEY }}
 
           # ---- OpenAI (disabled in CI) ----
           OPENAI_API_KEY=

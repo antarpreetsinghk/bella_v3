@@ -9,7 +9,7 @@ from fastapi import HTTPException, Header, Query
 from typing import Optional
 
 # Get API key from environment
-EXPECTED_API_KEY = os.getenv("BELLA_API_KEY", "bella-dev-key-2024")
+EXPECTED_API_KEY = os.getenv("BELLA_API_KEY", "")
 
 def require_api_key(
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
@@ -61,7 +61,7 @@ def require_api_key(
 def get_api_key_info() -> dict:
     """Get information about API key configuration."""
     return {
-        "api_key_configured": bool(EXPECTED_API_KEY and EXPECTED_API_KEY != "bella-dev-key-2024"),
+        "api_key_configured": bool(EXPECTED_API_KEY and EXPECTED_API_KEY != ""),
         "api_key_source": "environment" if os.getenv("BELLA_API_KEY") else "default",
         "expected_length": len(EXPECTED_API_KEY) if EXPECTED_API_KEY else 0,
         "authentication_methods": [

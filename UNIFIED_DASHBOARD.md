@@ -8,7 +8,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Access unified dashboard
 # URL: http://localhost:8000/
-# Auth: X-API-Key: bella-dev-key-2024
+# Auth: X-API-Key: YOUR_API_KEY
 ```
 
 ## 📊 Dashboard Features
@@ -44,11 +44,11 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 **API Key Method:**
 ```bash
 # Via Header (recommended)
-curl -H "X-API-Key: bella-dev-key-2024" http://localhost:8000/
+curl -H "X-API-Key: YOUR_API_KEY" http://localhost:8000/
 
 # Via JavaScript
 fetch('http://localhost:8000/', {
-  headers: { 'X-API-Key': 'bella-dev-key-2024' }
+  headers: { 'X-API-Key': 'YOUR_API_KEY' }
 })
 ```
 

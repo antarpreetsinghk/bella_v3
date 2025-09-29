@@ -13,7 +13,7 @@ echo ""
 # Check if API key is set
 if [ -z "$BELLA_API_KEY" ]; then
     echo "⚙️ Setting up API key..."
-    export BELLA_API_KEY="bella-dev-key-2024"
+    export BELLA_API_KEY="YOUR_API_KEY"
     echo "✅ Using default dev API key: $BELLA_API_KEY"
 else
     echo "✅ API key configured: ${BELLA_API_KEY:0:12}..."
