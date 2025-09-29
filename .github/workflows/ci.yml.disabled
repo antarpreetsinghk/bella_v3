@@ -1,0 +1,355 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Unit tests (skip if none)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          # Test dependencies
+          pip install pytest pytest-cov pytest-asyncio httpx
+          # Security scanning
+          pip install safety bandit
+
+      - name: Run security checks
+        run: |
+          echo "🔒 Running security scans..."
+          # Check for known vulnerabilities
+          safety check --json --output safety-report.json || true
+          # Static security analysis
+          bandit -r app/ -f json -o bandit-report.json || true
+          echo "✅ Security checks completed"
+
+      - name: Run linting
+        run: |
+          echo "🧹 Running code quality checks..."
+          # Install linting tools
+          pip install flake8 black isort
+          # Run formatters and linters
+          black --check app/ || echo "⚠️ Code formatting issues found"
+          isort --check-only app/ || echo "⚠️ Import sorting issues found"
+          flake8 app/ --max-line-length=88 --extend-ignore=E203,W503 || echo "⚠️ Linting issues found"
+          echo "✅ Code quality checks completed"
+
+      - name: Run tests with coverage
+        run: |
+          set -e
+          if [ -d tests ] && compgen -G "tests/test_*.py" > /dev/null; then
+            echo "📊 Running tests with coverage..."
+            pytest tests/ --cov=app --cov-report=xml --cov-report=html --maxfail=3 -v
+          else
+            echo "📝 Creating basic tests directory and sample test..."
+            mkdir -p tests
+            cat > tests/test_health.py << 'EOF'
+            import pytest
+            from fastapi.testclient import TestClient
+            from app.main import app
+
+            client = TestClient(app)
+
+            def test_health_endpoint():
+                """Test that health endpoint returns 200"""
+                response = client.get("/healthz")
+                assert response.status_code == 200
+                assert "ok" in response.json()
+
+            def test_ready_endpoint():
+                """Test that ready endpoint returns 200"""
+                response = client.get("/readyz")
+                assert response.status_code == 200
+EOF
+            pytest tests/ --cov=app --cov-report=xml --maxfail=1 -v
+          fi
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage.xml
+            htmlcov/
+            safety-report.json
+            bandit-report.json
+
+  compose-smoke:
+    name: Docker Compose smoke test
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Create CI .env (safe, minimal)
+        run: |
+          cat > .env << 'EOF'
+          # ---- App ----
+          APP_ENV=ci
+          LLM_ENABLED=false
+          BELLA_API_KEY=ci-key-not-used
+
+          # ---- OpenAI (disabled in CI) ----
+          OPENAI_API_KEY=
+          OPENAI_MODEL=gpt-4o-mini
+          OPENAI_BASE_URL=
+
+          # ---- Postgres (compose) ----
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          POSTGRES_DB=bella
+
+          # ---- DB URL for API ----
+          DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/bella
+
+          # ---- Twilio (not used in CI) ----
+          TWILIO_ACCOUNT_SID=
+          TWILIO_AUTH_TOKEN=
+          TWILIO_PHONE_NUMBER=
+
+          # ---- Google Calendar (disabled in CI) ----
+          GOOGLE_CALENDAR_ENABLED=false
+          GOOGLE_SERVICE_ACCOUNT_JSON=
+          GOOGLE_CALENDAR_ID=primary
+          BUSINESS_EMAIL=
+
+          # ---- Redis (not used in CI) ----
+          REDIS_URL=
+          EOF
+          echo "Wrote CI .env with all required variables"
+
+      - name: Build containers with cache
+        run: |
+          export DOCKER_BUILDKIT=1
+          docker compose build --parallel
+
+      - name: Start services
+        run: docker compose up -d
+
+      - name: Early logs & ps
+        run: |
+          sleep 3
+          docker compose ps
+          docker compose logs --no-color --tail=100 || true
+
+      - name: Wait for API /healthz
+        run: |
+          set -e
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/healthz >/dev/null; then
+              echo "API is up"
+              exit 0
+            fi
+            echo "Waiting for API... ($i/60)"
+            sleep 2
+          done
+          echo "API did not become ready in time"
+          docker compose logs --no-color
+          exit 1
+
+      - name: Quick smoke checks
+        run: |
+          curl -fsS http://localhost:8000/healthz | tee /tmp/healthz.json
+          curl -fsS http://localhost:8000/readyz | tee /tmp/readyz.json
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs
+          path: |
+            /tmp/healthz.json
+            /tmp/readyz.json
+          if-no-files-found: warn
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: compose-smoke
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ca-central-1
+
+      - name: Deploy to staging (placeholder)
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          echo "This would deploy to a staging ECS service"
+          # Would deploy to bella-staging-service
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: compose-smoke
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ca-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bella-v3
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Update task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: aws/task-definition.json
+          container-name: bella-api
+          image: ${{ steps.login-ecr.outputs.registry }}/bella-v3:${{ github.sha }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: bella-prod-service
+          cluster: bella-prod-cluster
+          wait-for-service-stability: true
+
+      - name: Run production smoke tests
+        run: |
+          echo "📊 Running production validation tests..."
+          sleep 30  # Reduced wait time
+
+          # Health check with retry
+          echo "🎯 Testing health endpoint..."
+          for i in $(seq 1 20); do
+            if curl -fsS "http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/healthz" >/dev/null 2>&1; then
+              echo "✅ Health check passed"
+              HEALTH_OK=true
+              break
+            fi
+            echo "⏳ Health check attempt $i/20..."
+            sleep 10
+          done
+
+          if [ "$HEALTH_OK" != "true" ]; then
+            echo "❌ Health check failed after 20 attempts"
+            exit 1
+          fi
+
+          # Ready check
+          echo "🔄 Testing ready endpoint..."
+          curl -fsS "http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/readyz" || {
+            echo "❌ Ready check failed"
+            exit 1
+          }
+          echo "✅ Ready check passed"
+
+          # Voice webhook test
+          echo "📞 Testing voice webhook..."
+          RESPONSE=$(curl -s -w "HTTP_CODE:%{http_code}" \
+            "http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/twilio/voice" \
+            -X POST \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "CallSid=CI_DEPLOYMENT_TEST" \
+            -d "From=%2B14165551234" \
+            --max-time 15)
+
+          HTTP_CODE=$(echo "$RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Voice webhook test passed (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Voice webhook test failed (HTTP $HTTP_CODE)"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "🎉 All production smoke tests passed!"
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "🚀 Production deployment successful!"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Time: $(date -u)"
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "⚠️ Production deployment failed - consider rollback"
+          echo "Failed commit: ${{ github.sha }}"
+          # In a real scenario, you might trigger an automatic rollback here

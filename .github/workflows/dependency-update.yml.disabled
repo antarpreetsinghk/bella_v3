@@ -66,17 +66,17 @@ jobs:
 
             # Parse JSON and create table
             python3 << 'EOF'
-import json
-import sys
+            import json
+            import sys
 
-try:
-    with open('outdated-packages.json', 'r') as f:
-        packages = json.load(f)
+            try:
+                with open('outdated-packages.json', 'r') as f:
+                    packages = json.load(f)
 
-    for pkg in packages:
-        print(f"| {pkg['name']} | {pkg['version']} | {pkg['latest_version']} |")
-except:
-    print("| No outdated packages found | - | - |")
+                for pkg in packages:
+                    print(f"| {pkg['name']} | {pkg['version']} | {pkg['latest_version']} |")
+            except:
+                print("| No outdated packages found | - | - |")
 EOF
           else
             echo "## ✅ All Packages Up to Date" >> dependency-report.md
