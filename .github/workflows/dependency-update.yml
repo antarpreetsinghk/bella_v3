@@ -1,0 +1,159 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Check for dependency updates weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-dependencies:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit and pip-tools
+        run: |
+          pip install pip-audit pip-tools
+
+      - name: Check for vulnerable dependencies
+        run: |
+          echo "🔍 Checking for vulnerable dependencies..."
+          pip-audit --requirement requirements.txt --format=json --output=vulnerability-report.json || true
+          pip-audit --requirement requirements.txt
+
+      - name: Check for outdated dependencies
+        run: |
+          echo "📦 Checking for outdated dependencies..."
+          # Install current dependencies
+          pip install -r requirements.txt
+
+          # Check for outdated packages
+          pip list --outdated --format=json > outdated-packages.json
+          pip list --outdated
+
+      - name: Generate dependency update report
+        run: |
+          echo "📋 Dependency Update Report" > dependency-report.md
+          echo "=========================" >> dependency-report.md
+          echo "" >> dependency-report.md
+          echo "Generated on: $(date)" >> dependency-report.md
+          echo "" >> dependency-report.md
+
+          if [ -s vulnerability-report.json ]; then
+            echo "## 🚨 Security Vulnerabilities Found" >> dependency-report.md
+            echo "" >> dependency-report.md
+            echo "Please review the vulnerability report and update affected packages." >> dependency-report.md
+            echo "" >> dependency-report.md
+          else
+            echo "## ✅ No Security Vulnerabilities Found" >> dependency-report.md
+            echo "" >> dependency-report.md
+          fi
+
+          if [ -s outdated-packages.json ]; then
+            echo "## 📦 Outdated Packages" >> dependency-report.md
+            echo "" >> dependency-report.md
+            echo "| Package | Current Version | Latest Version |" >> dependency-report.md
+            echo "|---------|-----------------|----------------|" >> dependency-report.md
+
+            # Parse JSON and create table
+            python3 << 'EOF'
+import json
+import sys
+
+try:
+    with open('outdated-packages.json', 'r') as f:
+        packages = json.load(f)
+
+    for pkg in packages:
+        print(f"| {pkg['name']} | {pkg['version']} | {pkg['latest_version']} |")
+except:
+    print("| No outdated packages found | - | - |")
+EOF
+          else
+            echo "## ✅ All Packages Up to Date" >> dependency-report.md
+            echo "" >> dependency-report.md
+          fi
+
+          echo "" >> dependency-report.md
+          echo "## 🔧 Recommended Actions" >> dependency-report.md
+          echo "" >> dependency-report.md
+          echo "1. Review security vulnerabilities and update immediately" >> dependency-report.md
+          echo "2. Test outdated package updates in a development environment" >> dependency-report.md
+          echo "3. Update packages incrementally to avoid breaking changes" >> dependency-report.md
+          echo "4. Run full test suite after updates" >> dependency-report.md
+
+      - name: Create issue for vulnerabilities
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Check if we have vulnerabilities
+            let hasVulnerabilities = false;
+            try {
+              const vulnReport = fs.readFileSync('vulnerability-report.json', 'utf8');
+              const vulnerabilities = JSON.parse(vulnReport);
+              hasVulnerabilities = vulnerabilities.length > 0;
+            } catch (e) {
+              console.log('No vulnerability report found or parsing failed');
+            }
+
+            // Read the dependency report
+            let reportContent = '';
+            try {
+              reportContent = fs.readFileSync('dependency-report.md', 'utf8');
+            } catch (e) {
+              reportContent = 'Failed to generate dependency report';
+            }
+
+            if (hasVulnerabilities) {
+              // Create urgent issue for vulnerabilities
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🚨 Security Vulnerabilities Found in Dependencies',
+                body: `${reportContent}\n\n⚠️ **This is an automated security alert. Please address immediately.**`,
+                labels: ['security', 'dependencies', 'urgent']
+              });
+            } else {
+              // Check if there are outdated packages
+              let hasOutdated = false;
+              try {
+                const outdated = fs.readFileSync('outdated-packages.json', 'utf8');
+                const packages = JSON.parse(outdated);
+                hasOutdated = packages.length > 0;
+              } catch (e) {
+                console.log('No outdated packages found');
+              }
+
+              if (hasOutdated) {
+                // Create info issue for outdated packages
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: '📦 Dependency Updates Available',
+                  body: `${reportContent}\n\n💡 **Weekly dependency update check completed.**`,
+                  labels: ['dependencies', 'maintenance']
+                });
+              }
+            }
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-reports-${{ github.run_number }}
+          path: |
+            dependency-report.md
+            vulnerability-report.json
+            outdated-packages.json
+          retention-days: 90

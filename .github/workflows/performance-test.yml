@@ -1,0 +1,186 @@
+name: Performance Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: 'Environment to test'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+      test_duration:
+        description: 'Test duration in seconds'
+        required: true
+        default: '60'
+      concurrent_users:
+        description: 'Number of concurrent users'
+        required: true
+        default: '10'
+  schedule:
+    # Run performance tests weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+jobs:
+  performance-test:
+    name: Load Testing
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install load testing tools
+        run: |
+          pip install locust httpx asyncio
+
+      - name: Create performance test script
+        run: |
+          cat > performance_test.py << 'EOF'
+import time
+import random
+from locust import HttpUser, task, between
+
+class BellaVoiceUser(HttpUser):
+    wait_time = between(1, 3)
+
+    def on_start(self):
+        """Setup for each simulated user"""
+        self.call_sid = f"PERF_TEST_{random.randint(100000, 999999)}"
+
+    @task(3)
+    def health_check(self):
+        """Test health endpoint - most frequent"""
+        self.client.get("/healthz")
+
+    @task(1)
+    def ready_check(self):
+        """Test ready endpoint"""
+        self.client.get("/readyz")
+
+    @task(2)
+    def voice_webhook(self):
+        """Test voice webhook endpoint"""
+        self.client.post("/twilio/voice", data={
+            "CallSid": self.call_sid,
+            "From": "+14165551234",
+            "AccountSid": "TEST_ACCOUNT"
+        })
+
+    @task(1)
+    def voice_collect(self):
+        """Test voice collection endpoint"""
+        self.client.post("/twilio/voice/collect", data={
+            "CallSid": self.call_sid,
+            "SpeechResult": "John Smith, tomorrow at 2 PM, 416-555-1234"
+        })
+EOF
+
+      - name: Set target URL
+        run: |
+          if [ "${{ github.event.inputs.target_environment }}" = "staging" ]; then
+            echo "TARGET_URL=http://bella-staging-alb.ca-central-1.elb.amazonaws.com" >> $GITHUB_ENV
+          else
+            echo "TARGET_URL=http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com" >> $GITHUB_ENV
+          fi
+
+      - name: Run performance tests
+        run: |
+          DURATION=${{ github.event.inputs.test_duration || '60' }}
+          USERS=${{ github.event.inputs.concurrent_users || '10' }}
+
+          echo "🚀 Running performance test for ${DURATION}s with ${USERS} concurrent users"
+          echo "Target: $TARGET_URL"
+
+          # Run locust in headless mode
+          locust -f performance_test.py \
+            --host=$TARGET_URL \
+            --users=$USERS \
+            --spawn-rate=2 \
+            --run-time=${DURATION}s \
+            --html=performance_report.html \
+            --csv=performance_results
+
+      - name: Analyze results
+        run: |
+          echo "📊 Performance Test Results Summary"
+          echo "=================================="
+
+          if [ -f performance_results_stats.csv ]; then
+            echo "📈 Response Time Statistics:"
+            tail -n +2 performance_results_stats.csv | while IFS=',' read -r name requests failures median avg min max req_per_sec failures_per_sec; do
+              echo "  $name:"
+              echo "    Requests: $requests"
+              echo "    Failures: $failures"
+              echo "    Avg Response: ${avg}ms"
+              echo "    Median Response: ${median}ms"
+              echo "    Requests/sec: $req_per_sec"
+              echo ""
+            done
+          fi
+
+          # Check for performance thresholds
+          echo "🎯 Performance Threshold Checks:"
+
+          # Health endpoint should respond under 100ms
+          HEALTH_AVG=$(grep "/healthz" performance_results_stats.csv | cut -d',' -f6)
+          if [ ! -z "$HEALTH_AVG" ] && [ "$HEALTH_AVG" -lt 100 ]; then
+            echo "✅ Health endpoint average response time: ${HEALTH_AVG}ms (< 100ms)"
+          else
+            echo "⚠️ Health endpoint average response time: ${HEALTH_AVG}ms (target: < 100ms)"
+          fi
+
+          # Voice webhook should respond under 3000ms (Twilio timeout)
+          VOICE_AVG=$(grep "/twilio/voice" performance_results_stats.csv | cut -d',' -f6)
+          if [ ! -z "$VOICE_AVG" ] && [ "$VOICE_AVG" -lt 3000 ]; then
+            echo "✅ Voice webhook average response time: ${VOICE_AVG}ms (< 3000ms)"
+          else
+            echo "⚠️ Voice webhook average response time: ${VOICE_AVG}ms (target: < 3000ms)"
+          fi
+
+      - name: Upload performance reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-reports-${{ github.sha }}
+          path: |
+            performance_report.html
+            performance_results_*.csv
+          retention-days: 30
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('performance_results_stats.csv')) {
+              const results = fs.readFileSync('performance_results_stats.csv', 'utf8');
+              const lines = results.split('\n').slice(1); // Skip header
+
+              let comment = '## 📊 Performance Test Results\n\n';
+              comment += '| Endpoint | Requests | Failures | Avg Response (ms) | Requests/sec |\n';
+              comment += '|----------|----------|----------|-------------------|---------------|\n';
+
+              lines.forEach(line => {
+                if (line.trim()) {
+                  const [name, requests, failures, , avg, , , reqPerSec] = line.split(',');
+                  comment += `| ${name} | ${requests} | ${failures} | ${avg} | ${reqPerSec} |\n`;
+                }
+              });
+
+              comment += '\n📈 Full performance report available in workflow artifacts.';
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
