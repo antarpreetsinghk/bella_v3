@@ -22,7 +22,11 @@ LOCAL_TZ = ZoneInfo("America/Edmonton")
 @pytest.fixture
 def mock_db_session():
     """Mock database session"""
-    return MagicMock()
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock()
+    mock_session.commit = AsyncMock()
+    mock_session.rollback = AsyncMock()
+    return mock_session
 
 
 @pytest.fixture
@@ -233,7 +237,10 @@ class TestBookingService:
 
     @pytest.mark.asyncio
     @patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock)
-    async def test_booking_with_caller_id_fallback(self, mock_extract, mock_db_session):
+    @patch('app.services.booking.get_user_by_mobile')
+    @patch('app.services.booking.create_user')
+    @patch('app.services.booking.create_appointment_unique')
+    async def test_booking_with_caller_id_fallback(self, mock_create_appt, mock_create_user, mock_get_user, mock_extract, mock_db_session):
         """Test booking using caller ID as phone fallback"""
         # Mock LLM extraction - missing phone in transcript
         mock_extracted = MagicMock()
@@ -245,6 +252,21 @@ class TestBookingService:
             'notes': 'Regular appointment'
         }
         mock_extract.return_value = mock_extracted
+
+        # Mock user lookup - not found (use caller ID)
+        mock_get_user.return_value = None
+
+        # Mock user creation with caller ID
+        mock_new_user = MagicMock()
+        mock_new_user.id = 123
+        mock_new_user.full_name = 'John Smith'
+        mock_new_user.mobile = '+14165551234'
+        mock_create_user.return_value = mock_new_user
+
+        # Mock appointment creation
+        mock_appointment = MagicMock()
+        mock_appointment.id = 456
+        mock_create_appt.return_value = mock_appointment
 
         result = await book_from_transcript(
             mock_db_session,
@@ -287,7 +309,7 @@ class TestBookingUtilityFunctions:
     @pytest.mark.asyncio
     async def test_booking_with_different_locales(self, mock_db_session):
         """Test booking with different locale settings"""
-        with patch('app.services.booking.extract_appointment_fields') as mock_extract:
+        with patch('app.services.booking.extract_appointment_fields', new_callable=AsyncMock) as mock_extract:
             mock_extracted = MagicMock()
             mock_extracted.model_dump.return_value = {
                 'full_name': 'Jean Dupont',
