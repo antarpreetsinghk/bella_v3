@@ -85,10 +85,23 @@ EOF
 
       - name: Set target URL
         run: |
-          if [ "${{ github.event.inputs.target_environment }}" = "staging" ]; then
+          TARGET_ENV="${{ github.event.inputs.target_environment || 'production' }}"
+          if [ "$TARGET_ENV" = "staging" ]; then
             echo "TARGET_URL=http://bella-staging-alb.ca-central-1.elb.amazonaws.com" >> $GITHUB_ENV
           else
             echo "TARGET_URL=http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com" >> $GITHUB_ENV
+          fi
+          echo "🎯 Target environment: $TARGET_ENV"
+
+      - name: Validate target availability
+        run: |
+          echo "🔍 Checking if target is available..."
+          if curl -f -s --max-time 10 "$TARGET_URL/healthz" > /dev/null; then
+            echo "✅ Target is available and responding"
+          else
+            echo "❌ Target is not available - skipping performance tests"
+            echo "This is expected for automated runs when services are not deployed"
+            exit 0
           fi
 
       - name: Run performance tests
