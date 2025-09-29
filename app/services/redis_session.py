@@ -68,6 +68,10 @@ def get_redis_client() -> redis.Redis:
     """Get or create Redis client"""
     global _redis_client
     if _redis_client is None:
+        # TEMPORARY: Disable Redis to fix 20-second timeouts causing call failures
+        logger.warning("Redis temporarily disabled to fix connection timeouts - using in-memory fallback")
+        return None
+
         redis_url = os.getenv("REDIS_URL")
         if not redis_url:
             # Fallback to localhost for development
