@@ -19,16 +19,12 @@ logger = logging.getLogger(__name__)
 _spacy_nlp = None
 
 def _get_spacy():
-    """Lazy load spaCy to avoid startup time if not needed"""
+    """Temporarily disabled spaCy to fix performance issues"""
     global _spacy_nlp
     if _spacy_nlp is None:
-        try:
-            import spacy
-            _spacy_nlp = spacy.load("en_core_web_sm")
-            logger.info("spaCy model loaded successfully")
-        except (ImportError, OSError) as e:
-            logger.warning("spaCy not available (%s), falling back to regex for names", e)
-            _spacy_nlp = False
+        # TEMPORARY: Disable spaCy for faster startup
+        logger.info("spaCy disabled for performance, using regex fallback")
+        _spacy_nlp = False
     return _spacy_nlp if _spacy_nlp else None
 
 
