@@ -57,7 +57,15 @@ class AWSCostTracker:
             self.aws_available = True
             logger.info("AWS Cost Explorer access verified")
         except Exception as e:
+            error_msg = str(e)
             logger.warning(f"AWS Cost Explorer not available: {e}")
+
+            # Provide helpful error messages
+            if "AccessDeniedException" in error_msg:
+                logger.info("💡 Fix: Run 'scripts/setup-aws-cost-monitoring.sh' to configure permissions")
+            elif "not enabled" in error_msg.lower():
+                logger.info("💡 Fix: Enable Cost Explorer in AWS Console > Billing > Cost Explorer")
+
             self.cost_explorer = None
             self.cloudwatch = None
             self.aws_available = False

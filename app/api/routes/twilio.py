@@ -1,11 +1,10 @@
 # app/api/routes/twilio.py
-from __future__ import annotations
-
 import json
 import logging
 import re
 from datetime import datetime
-from fastapi import APIRouter, Depends, Form, Request, Response
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from zoneinfo import ZoneInfo
 
@@ -28,6 +27,7 @@ from app.services.llm import extract_appointment_fields, clean_and_enhance_speec
 from app.services.booking import _parse_to_utc as parse_to_utc  # reuse future-only guard
 from app.crud.user import get_user_by_mobile, create_user
 from app.crud.appointment import create_appointment_unique
+from app.core.performance import performance_middleware, ResponseOptimizer
 from app.schemas.user import UserCreate
 
 # Optional business-hours support (works if you added app/core/business.py)
@@ -187,7 +187,7 @@ def _followup_prompt(missing: list[str] | None) -> str:
 async def voice_entry(
     CallSid: str = Form(default=""),
     From: str = Form(default="")
-) -> Response:
+):
     """Start the multi-turn wizard with caller ID capture and polite greeting."""
     sess = get_call_session(CallSid)
 
@@ -220,7 +220,7 @@ async def voice_collect(
     SpeechResult: str = Form(default=""),
     From: str = Form(default=""),
     CallSid: str = Form(default=""),
-) -> Response:
+):
     """
     Multi-turn stepper:
       ask_name -> ask_mobile -> ask_time -> confirm -> book

@@ -1,0 +1,40 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ce:GetCostAndUsage",
+                "ce:GetDimensionValues",
+                "ce:GetReservationCoverage",
+                "ce:GetReservationPurchaseRecommendation",
+                "ce:GetReservationUtilization",
+                "ce:GetUsageReport",
+                "ce:ListCostCategoryDefinitions",
+                "ce:DescribeCostCategoryDefinition",
+                "ce:GetRightsizingRecommendation",
+                "ce:GetCostCategories"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "budgets:ViewBudget",
+                "budgets:DescribeBudgets",
+                "budgets:DescribeBudgetAction",
+                "budgets:DescribeBudgetActionsForAccount",
+                "budgets:DescribeBudgetActionsForBudget"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "aws-portal:ViewBilling",
+                "aws-portal:ViewAccount"
+            ],
+            "Resource": "*"
+        }
+    ]
+}

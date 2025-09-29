@@ -116,9 +116,19 @@
             <strong>Dashboard is ready!</strong> Cost data updates automatically every 5 minutes.
         </div>
         <p><strong>To enable real AWS cost data:</strong></p>
+        <div style="background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 10px 0;">
+            <p><strong>🚀 Automated Setup (Recommended):</strong></p>
+            <code style="background: #e6f3ff; padding: 8px; border-radius: 3px; display: block; font-family: monospace;">
+                chmod +x scripts/setup-aws-cost-monitoring.sh<br>
+                ./scripts/setup-aws-cost-monitoring.sh
+            </code>
+            <p style="margin-top: 10px;"><small>This script will automatically configure AWS permissions and enable live cost tracking.</small></p>
+        </div>
+        <p><strong>Manual Setup:</strong></p>
         <ol>
-            <li>Set up AWS Cost Explorer permissions</li>
+            <li>Set up AWS Cost Explorer permissions using provided policy</li>
             <li>Run: <code>aws configure</code></li>
+            <li>Enable Cost Explorer in AWS Console > Billing</li>
             <li>Restart the cost monitoring service</li>
         </ol>
         <p><strong>To set up cost alerts:</strong></p>

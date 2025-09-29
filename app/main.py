@@ -42,7 +42,11 @@ from app.api.routes.users import router as users_router
 from app.api.routes.appointments import router as appointments_router
 from app.api.routes.assistant import router as assistant_router
 from app.api.routes.twilio import router as twilio_router
-from app.api.routes.home import router as home_router  # dashboard (Basic Auth + CSRF live there)
+from app.api.routes.unified_dashboard import router as unified_router
+# Deprecated dashboards - will be removed
+from app.api.routes.home import router as home_router  # OLD: Basic Auth dashboard
+from app.api.routes.dashboard import router as dashboard_router  # OLD: Cost-only dashboard
+from app.api.routes.performance import router as performance_router  # OLD: Performance-only
 
 app = FastAPI(title="Bella V3", description="AI-powered appointment booking system")
 
@@ -235,9 +239,14 @@ async def lock_all(request, call_next):
     return await call_next(request)
 
 # -------- Include routers --------
-# Put home first so "/" is served by it
-app.include_router(home_router)
+# NEW: Unified dashboard serves "/" route
+app.include_router(unified_router)
 app.include_router(users_router)
 app.include_router(appointments_router)
 app.include_router(assistant_router)
 app.include_router(twilio_router)
+
+# OLD: Deprecated dashboards - keeping temporarily for migration
+app.include_router(home_router, prefix="/old")  # Moved to /old/
+app.include_router(dashboard_router, prefix="/old")  # Moved to /old/dashboard/
+app.include_router(performance_router, prefix="/old")  # Moved to /old/performance/

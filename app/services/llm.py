@@ -11,6 +11,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import settings
+from app.core.performance import optimize_llm_call
 
 
 # ---------- Public contract ----------
@@ -305,6 +306,7 @@ async def unified_appointment_extraction(raw_speech: str, conversation_context: 
     return parsed
 
 
+@optimize_llm_call
 async def extract_appointment_fields(transcript: str) -> ExtractedAppointment:
     """
     LEGACY function - kept for backward compatibility.
