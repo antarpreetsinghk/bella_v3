@@ -1,0 +1,155 @@
+# Security-focused Docker Compose configuration
+# Use for security testing and hardened deployments
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - SECURITY_SCAN=true
+    environment:
+      # Security hardening
+      - APP_ENV=production
+      - LOG_LEVEL=WARNING
+      - LOG_REQUESTS=false
+      - LOG_RESPONSES=false
+      - MAX_LOG_LENGTH=100
+
+      # Disable debug features
+      - DEBUG=false
+      - TESTING=false
+
+      # Security headers
+      - ENABLE_SECURITY_HEADERS=true
+      - SECURE_SSL_REDIRECT=true
+      - SECURE_BROWSER_XSS_FILTER=true
+      - SECURE_CONTENT_TYPE_NOSNIFF=true
+
+      # Rate limiting
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_REQUESTS=100
+      - RATE_LIMIT_WINDOW=3600
+
+      # Database security
+      - DB_SSL_MODE=require
+      - DB_SSL_CERT_VERIFICATION=true
+
+      # Redis security
+      - REDIS_SSL=true
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+
+      # API security
+      - BELLA_API_KEY=${BELLA_API_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - CSRF_SECRET=${CSRF_SECRET}
+
+      # External services security
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_SERVICE_ACCOUNT_JSON=${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+
+    ports:
+      - "8000:8000"
+    volumes:
+      # Read-only filesystem where possible
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 100M
+          mode: 1777
+    restart: unless-stopped
+
+    # Security constraints
+    user: "1000:1000"  # Non-root user
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # Only if needed for port binding
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined  # Adjust based on needs
+
+    # Resource limits
+    mem_limit: 512m
+    cpus: '0.5'
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=md5
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_secure:/var/lib/postgresql/data
+      # Security: Read-only config
+      - ./security/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    restart: unless-stopped
+
+    # Security constraints
+    user: postgres
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits
+    mem_limit: 256m
+    cpus: '0.25'
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Security monitoring
+  security-scanner:
+    image: aquasec/trivy:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - .:/workspace:ro
+    working_dir: /workspace
+    command: >
+      sh -c "
+        echo 'Running security scans...' &&
+        trivy fs --security-checks vuln,config . &&
+        trivy image bella-v3:latest
+      "
+    profiles:
+      - security-scan
+
+volumes:
+  postgres_data_secure:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres-secure
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

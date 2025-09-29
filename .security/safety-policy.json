@@ -1,0 +1,37 @@
+{
+  "security": {
+    "ignore-cvss-unknown-risk": false,
+    "ignore-cvss-severity-below": 5.0,
+    "continue-on-vulnerability-error": false
+  },
+  "report": {
+    "sca": {
+      "enabled": true
+    }
+  },
+  "ignore": {
+    "vulnerabilities": [
+      {
+        "id": "70612",
+        "reason": "False positive - Jinja2 autoescape is properly configured",
+        "expires": "2025-12-31"
+      }
+    ],
+    "packages": [
+    ]
+  },
+  "alert": {
+    "vulnerabilities": {
+      "enabled": true,
+      "security-updates": true
+    }
+  },
+  "scan": {
+    "max-depth": 10,
+    "exclude": [
+      "*/test*",
+      "*/venv/*",
+      "*/.git/*"
+    ]
+  }
+}
