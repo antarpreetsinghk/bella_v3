@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field
 
 from app.services.llm import extract_appointment_fields
+from app.services.google_calendar import create_calendar_event
 from app.crud.user import get_user_by_mobile, create_user
 from app.crud.appointment import create_appointment_unique
 from app.schemas.user import UserCreate
@@ -201,21 +202,47 @@ async def book_from_transcript(
             }),
         )
 
-    # 8) Success
+    # 8) Create Google Calendar event (non-blocking)
+    calendar_event = None
+    try:
+        calendar_event = await create_calendar_event(
+            user_name=user_name,
+            user_mobile=user_mobile,
+            starts_at_utc=appt.starts_at,
+            duration_min=appt.duration_min,
+            notes=appt.notes
+        )
+        if calendar_event:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info("Calendar event created for appointment %s: %s", appt.id, calendar_event.get('event_id'))
+    except Exception as e:
+        # Don't fail the booking if calendar integration fails
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning("Failed to create calendar event for appointment %s: %s", appt.id, e)
+
+    # 9) Success response
     msg = _compose_success_message(user_name, appt.starts_at, appt.duration_min)
+    echo_data = {
+        "appointment_id": appt.id,
+        "user_id": user.id,
+        "normalized": {
+            "full_name": user_name,
+            "mobile": user_mobile,
+            "starts_at_utc": appt.starts_at,
+            "duration_min": appt.duration_min,
+            "notes": appt.notes,
+        },
+        "extracted": ex,
+    }
+
+    # Include calendar event info if successfully created
+    if calendar_event:
+        echo_data["calendar_event"] = calendar_event
+
     return BookResult(
         created=True,
         message_for_caller=msg,
-        echo=_jsonify({
-            "appointment_id": appt.id,
-            "user_id": user.id,
-            "normalized": {
-                "full_name": user_name,
-                "mobile": user_mobile,
-                "starts_at_utc": appt.starts_at,
-                "duration_min": appt.duration_min,
-                "notes": appt.notes,
-            },
-            "extracted": ex,
-        }),
+        echo=_jsonify(echo_data),
     )

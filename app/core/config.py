@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     # --- Redis Session Storage ---
     REDIS_URL: str | None = None
 
+    # --- Google Calendar Integration ---
+    GOOGLE_CALENDAR_ENABLED: bool = False
+    GOOGLE_SERVICE_ACCOUNT_JSON: str | None = None
+    GOOGLE_CALENDAR_ID: str | None = None
+    BUSINESS_EMAIL: str | None = None
+
     # --- Monitoring & Logging ---
     APP_ENV: str = "production"
     LOG_LEVEL: str = "INFO"
