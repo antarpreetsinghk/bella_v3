@@ -309,6 +309,7 @@ jobs:
             "http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/twilio/voice" \
             -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
+            -H "X-API-Key: kam1234" \
             -d "CallSid=CI_DEPLOYMENT_TEST" \
             -d "From=%2B14165551234" \
             --max-time 15)
