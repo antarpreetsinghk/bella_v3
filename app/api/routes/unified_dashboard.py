@@ -20,6 +20,11 @@ from app.db.session import get_session
 from app.db.models.appointment import Appointment
 from app.db.models.user import User
 from app.core.performance import performance_monitor, performance_cache
+from app.services.dashboard_session import dashboard_session_manager
+from app.services.circuit_breaker import circuit_manager
+from app.services.business_metrics import business_metrics
+from app.services.alerting import alert_manager
+from app.services.cost_optimization import cost_optimizer
 
 # Import cost tracking with fallback
 import sys
@@ -803,6 +808,161 @@ async def get_system_data(api_key: str = Depends(require_api_key)) -> Dict[str, 
         "status": "healthy" if perf_summary.get('avg_response_time', 0) < 1.0 else "degraded"
     }
 
+@router.post("/api/unified/session")
+async def create_dashboard_session(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+    """Create a new dashboard session"""
+    session = await dashboard_session_manager.create_session()
+    return {
+        "session_id": session.session_id,
+        "active_tab": session.active_tab,
+        "created_at": session.created_at.isoformat()
+    }
+
+@router.get("/api/unified/session/{session_id}")
+async def get_dashboard_session(
+    session_id: str,
+    api_key: str = Depends(require_api_key)
+) -> Dict[str, Any]:
+    """Get dashboard session data"""
+    session = await dashboard_session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {
+        "session_id": session.session_id,
+        "active_tab": session.active_tab,
+        "preferences": session.preferences,
+        "filters": session.filters,
+        "last_accessed": session.last_accessed.isoformat()
+    }
+
+@router.patch("/api/unified/session/{session_id}")
+async def update_dashboard_session(
+    session_id: str,
+    updates: Dict[str, Any],
+    api_key: str = Depends(require_api_key)
+) -> Dict[str, Any]:
+    """Update dashboard session data"""
+    success = await dashboard_session_manager.update_session(session_id, **updates)
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {"status": "updated", "session_id": session_id}
+
+@router.get("/api/unified/session-info")
+async def get_session_info(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+    """Get session storage information and Redis health"""
+    return await dashboard_session_manager.get_session_info()
+
+@router.get("/api/unified/circuit-breakers")
+async def get_circuit_breaker_status(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+    """Get circuit breaker status for all protected services"""
+    return circuit_manager.get_all_stats()
+
+@router.get("/api/unified/business-metrics")
+async def get_business_metrics(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+    """Get current business KPIs and performance metrics"""
+    kpis = await business_metrics.calculate_current_kpis()
+    return {
+        "total_calls": kpis.total_calls,
+        "completed_calls": kpis.completed_calls,
+        "failed_calls": kpis.failed_calls,
+        "success_rate": kpis.success_rate,
+        "avg_response_time": kpis.avg_response_time,
+        "completion_rate": kpis.completion_rate,
+        "speech_recognition_accuracy": kpis.speech_recognition_accuracy,
+        "ai_extraction_success_rate": kpis.ai_extraction_success_rate,
+        "fallback_usage_rate": kpis.fallback_usage_rate,
+        "cost_per_call": kpis.cost_per_call,
+        "whisper_api_calls": kpis.whisper_api_calls,
+        "calculated_at": kpis.calculated_at.isoformat()
+    }
+
+@router.get("/api/unified/trends")
+async def get_performance_trends(
+    hours: int = 24,
+    api_key: str = Depends(require_api_key)
+) -> Dict[str, Any]:
+    """Get hourly performance trends for visualization"""
+    trends = await business_metrics.get_hourly_trends(hours)
+    return {"trends": trends, "period_hours": hours}
+
+@router.get("/api/unified/alerts")
+async def get_performance_alerts(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+    """Get current performance alerts and warnings"""
+    alerts = await business_metrics.get_performance_alerts()
+    return {
+        "alerts": alerts,
+        "alert_count": len(alerts),
+        "has_critical": any(alert.get("severity") == "high" for alert in alerts)
+    }
+
+@router.get("/api/unified/alerts")
+async def get_active_alerts(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+    """Get active alerts and alert summary"""
+    alert_summary = alert_manager.get_alert_summary()
+    sla_dashboard = await alert_manager.get_sla_dashboard()
+
+    return {
+        "alert_summary": alert_summary,
+        "sla_status": sla_dashboard,
+        "overall_health": sla_dashboard["overall_health_score"]
+    }
+
+@router.get("/api/unified/cost-optimization")
+async def get_cost_optimization(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+    """Get cost optimization dashboard data"""
+    return await cost_optimizer.get_optimization_dashboard()
+
+@router.post("/api/unified/alerts")
+async def create_alert(
+    alert_data: Dict[str, Any],
+    api_key: str = Depends(require_api_key)
+) -> Dict[str, Any]:
+    """Create a new alert manually"""
+    alert_id = await alert_manager.create_alert(
+        component=alert_data.get("component", "manual"),
+        severity=alert_data.get("severity", "medium"),
+        message=alert_data.get("message", "Manual alert"),
+        details=alert_data.get("details", {})
+    )
+    return {"alert_id": alert_id, "status": "created"}
+
+@router.patch("/api/unified/alerts/{alert_id}/resolve")
+async def resolve_alert(
+    alert_id: str,
+    resolution_data: Dict[str, Any],
+    api_key: str = Depends(require_api_key)
+) -> Dict[str, Any]:
+    """Resolve an active alert"""
+    resolution_note = resolution_data.get("note", "Resolved via dashboard")
+    success = await alert_manager.resolve_alert(alert_id, resolution_note)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    return {"status": "resolved", "alert_id": alert_id}
+
+@router.get("/api/unified/sla-metrics")
+async def get_sla_metrics(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+    """Get detailed SLA metrics for all services"""
+    return await alert_manager.get_sla_dashboard()
+
+@router.post("/api/unified/service-status")
+async def update_service_status(
+    status_data: Dict[str, Any],
+    api_key: str = Depends(require_api_key)
+) -> Dict[str, Any]:
+    """Update service status for SLA tracking"""
+    service = status_data.get("service")
+    is_up = status_data.get("is_up", True)
+
+    if not service:
+        raise HTTPException(status_code=400, detail="Service name required")
+
+    await alert_manager.track_service_status(service, is_up)
+    return {"status": "updated", "service": service, "is_up": is_up}
+
 @router.get("/api/unified/status")
 async def get_unified_status(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
     """Get overall system status for header indicators"""
@@ -820,6 +980,19 @@ async def get_unified_status(api_key: str = Depends(require_api_key)) -> Dict[st
         system_status = "warning"
         performance_status = "error"
 
+    # Redis health check
+    session_info = await dashboard_session_manager.get_session_info()
+    redis_status = "healthy" if session_info.get("redis_connected") else "warning"
+
+    # Circuit breaker health check
+    circuit_stats = circuit_manager.get_all_stats()
+    circuit_status = "healthy"
+    openai_circuit = circuit_stats.get("openai_api", {})
+    if openai_circuit.get("state") == "open":
+        circuit_status = "error"
+    elif openai_circuit.get("state") == "half_open":
+        circuit_status = "warning"
+
     # Cost status
     try:
         tracker = AWSCostTracker()
@@ -830,6 +1003,9 @@ async def get_unified_status(api_key: str = Depends(require_api_key)) -> Dict[st
     return {
         "system": system_status,
         "performance": performance_status,
+        "redis": redis_status,
+        "circuit_breakers": circuit_status,
+        "openai_service": openai_circuit.get("state", "unknown"),
         "cost_aws_connected": cost_aws_connected,
         "timestamp": datetime.now().isoformat()
     }

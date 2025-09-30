@@ -250,3 +250,57 @@ app.include_router(twilio_router)
 app.include_router(home_router, prefix="/old")  # Moved to /old/
 app.include_router(dashboard_router, prefix="/old")  # Moved to /old/dashboard/
 app.include_router(performance_router, prefix="/old")  # Moved to /old/performance/
+
+# -------- Application startup/shutdown events --------
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on application startup"""
+    logger.info("Application startup - initializing monitoring services")
+
+    # Initialize alerting notification worker
+    try:
+        from app.services.alerting import alert_manager
+        import asyncio
+
+        # Start the notification worker in the background
+        asyncio.create_task(alert_manager.start_notification_worker())
+        logger.info("Alert notification worker started")
+
+        # Initialize SLA tracking for overall system uptime
+        await alert_manager.track_service_status("overall_uptime", True)
+
+    except Exception as e:
+        logger.error(f"Failed to initialize alerting system: {e}")
+
+    # Clean up old metrics data on startup
+    try:
+        from app.services.business_metrics import business_metrics
+        from app.services.cost_optimization import cost_optimizer
+
+        await business_metrics.cleanup_old_data()
+        logger.info("Cleaned up old business metrics data")
+
+    except Exception as e:
+        logger.error(f"Failed to cleanup old metrics: {e}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up resources on application shutdown"""
+    logger.info("Application shutdown - cleaning up resources")
+
+    try:
+        from app.services.alerting import alert_manager
+
+        # Track system going down for SLA monitoring
+        await alert_manager.track_service_status("overall_uptime", False)
+
+        # Create shutdown alert
+        await alert_manager.create_alert(
+            component="system",
+            severity="low",
+            message="Application shutdown initiated",
+            details={"timestamp": logger.getEffectiveLevel(), "reason": "normal_shutdown"}
+        )
+
+    except Exception as e:
+        logger.error(f"Failed during shutdown cleanup: {e}")

@@ -23,6 +23,7 @@ from app.services.canadian_extraction import (
 from app.db.session import get_session
 from app.services.redis_session import get_session as get_call_session, reset_session, save_session, get_redis_client
 from app.services.whisper_stt import transcribe_with_cache
+from app.services.business_metrics import business_metrics
 from app.services.llm import extract_appointment_fields, clean_and_enhance_speech, unified_appointment_extraction
 from app.services.booking import _parse_to_utc as parse_to_utc  # reuse future-only guard
 from app.crud.user import get_user_by_mobile, create_user
@@ -189,6 +190,10 @@ async def voice_entry(
     From: str = Form(default="")
 ):
     """Start the multi-turn wizard with caller ID capture and polite greeting."""
+
+    # Start business metrics tracking for this call
+    await business_metrics.start_call_tracking(CallSid)
+
     sess = get_call_session(CallSid)
 
     # AUTOMATIC CALLER ID CAPTURE

@@ -65,13 +65,9 @@ class CallSession:
 _redis_client: Optional[redis.Redis] = None
 
 def get_redis_client() -> redis.Redis:
-    """Get or create Redis client"""
+    """Get or create Redis client with improved connection handling"""
     global _redis_client
     if _redis_client is None:
-        # TEMPORARY: Disable Redis to fix 20-second timeouts causing call failures
-        logger.warning("Redis temporarily disabled to fix connection timeouts - using in-memory fallback")
-        return None
-
         redis_url = os.getenv("REDIS_URL")
         if not redis_url:
             # Fallback to localhost for development
@@ -82,12 +78,14 @@ def get_redis_client() -> redis.Redis:
             # Parse URL to check if it's Upstash (requires TLS)
             is_upstash = "upstash.io" in redis_url
 
-            # Configure connection parameters
+            # Configure connection parameters with reduced timeouts
             connection_params = {
                 "decode_responses": True,
-                "socket_connect_timeout": 10,
-                "socket_timeout": 10,
-                "retry_on_timeout": True
+                "socket_connect_timeout": 3,  # Reduced from 10s to 3s
+                "socket_timeout": 2,          # Reduced from 10s to 2s
+                "retry_on_timeout": True,
+                "retry_on_error": [redis.ConnectionError, redis.TimeoutError],
+                "health_check_interval": 30
             }
 
             # For Upstash, convert redis:// to rediss:// for SSL
@@ -96,9 +94,13 @@ def get_redis_client() -> redis.Redis:
                 logger.info("Converted Redis URL to SSL for Upstash")
 
             _redis_client = redis.from_url(redis_url, **connection_params)
-            # Test connection
-            _redis_client.ping()
-            logger.info("Redis connection established: %s", redis_url.split('@')[-1] if '@' in redis_url else redis_url)
+            # Test connection with timeout protection
+            try:
+                _redis_client.ping()
+                logger.info("Redis connection established: %s", redis_url.split('@')[-1] if '@' in redis_url else redis_url)
+            except redis.TimeoutError:
+                logger.warning("Redis ping timeout - using connection but with caution")
+                # Continue with connection, will fallback on individual operation timeouts
         except Exception as e:
             logger.error("Redis connection failed: %s", e)
             # Fallback to in-memory for development/testing
