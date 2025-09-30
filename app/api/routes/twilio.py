@@ -413,21 +413,22 @@ async def voice_collect(
     if sess.step == "ask_time":
         logger.info("[ask_time] processing speech: '%s'", speech)
 
-        # SIMPLIFIED: Use unified LLM extraction result
-        starts_at_iso = extracted_info.get("time")
+        # Try Canadian time extraction first (handles natural language)
+        starts_at_utc = await extract_canadian_time(speech)
 
-        if not starts_at_iso:
-            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-{_gather_block("I didn't catch that. Could you please say a specific date and time, like next Tuesday at 2 PM?")}
-</Response>""")
+        if not starts_at_utc:
+            # Fallback: check if LLM extraction provided an ISO format time
+            starts_at_iso = extracted_info.get("time")
+            if starts_at_iso:
+                try:
+                    from datetime import datetime
+                    starts_at_utc = datetime.fromisoformat(starts_at_iso.replace("Z", "+00:00"))
+                    logger.info("[ask_time] used LLM ISO time: '%s' -> %s", starts_at_iso, starts_at_utc)
+                except Exception as e:
+                    logger.warning("[ask_time] failed to parse LLM ISO time '%s': %s", starts_at_iso, e)
+                    starts_at_utc = None
 
-        # Parse the ISO string to datetime for business hours validation
-        try:
-            from datetime import datetime
-            starts_at_utc = datetime.fromisoformat(starts_at_iso.replace("Z", "+00:00"))
-        except Exception as e:
-            logger.warning("[ask_time] failed to parse ISO time '%s': %s", starts_at_iso, e)
+        if not starts_at_utc:
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 {_gather_block("I had trouble understanding that time. Could you please say it again, like Monday at 3 PM?")}

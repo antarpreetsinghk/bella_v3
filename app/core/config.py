@@ -11,12 +11,15 @@ class Settings(BaseSettings):
         extra="ignore",  # <-- key fix: prevents "extra inputs are not permitted"
     )
 
-    # --- Postgres ---
-    POSTGRES_HOST: str
+    # --- Database Configuration ---
+    DATABASE_URL: str | None = None
+
+    # --- Postgres (fallback if DATABASE_URL not provided) ---
+    POSTGRES_HOST: str | None = None
     POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str | None = None
+    POSTGRES_USER: str | None = None
+    POSTGRES_PASSWORD: str | None = None
 
     # --- OpenAI / GPT (NEW) ---
     OPENAI_API_KEY: str | None = None
@@ -64,12 +67,23 @@ class Settings(BaseSettings):
     # Sync URI (Alembic)
     @property
     def sync_db_uri(self) -> str:
+        if self.DATABASE_URL:
+            # Convert async URL to sync URL if needed
+            if "sqlite+aiosqlite:" in self.DATABASE_URL:
+                return self.DATABASE_URL.replace("sqlite+aiosqlite:", "sqlite:")
+            elif "postgresql+asyncpg:" in self.DATABASE_URL:
+                return self.DATABASE_URL.replace("postgresql+asyncpg:", "postgresql:")
+            return self.DATABASE_URL
+        # Fallback to postgres config
         pwd = urllib.parse.quote_plus(self.POSTGRES_PASSWORD)
         return f"postgresql://{self.POSTGRES_USER}:{pwd}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     # Async URI (SQLAlchemy engine)
     @property
     def async_db_uri(self) -> str:
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        # Fallback to postgres config
         pwd = urllib.parse.quote_plus(self.POSTGRES_PASSWORD)
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{pwd}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 

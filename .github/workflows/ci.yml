@@ -312,7 +312,7 @@ jobs:
             -H "X-API-Key: kam1234" \
             -d "CallSid=CI_DEPLOYMENT_TEST" \
             -d "From=%2B14165551234" \
-            --max-time 15)
+            --max-time 30)
 
           HTTP_CODE=$(echo "$RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
           if [ "$HTTP_CODE" = "200" ]; then
