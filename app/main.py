@@ -43,6 +43,7 @@ from app.api.routes.appointments import router as appointments_router
 from app.api.routes.assistant import router as assistant_router
 from app.api.routes.twilio import router as twilio_router
 from app.api.routes.unified_dashboard import router as unified_router
+from app.api.routes.admin_dashboard import router as admin_router
 # Deprecated dashboards - will be removed
 from app.api.routes.home import router as home_router  # OLD: Basic Auth dashboard
 from app.api.routes.dashboard import router as dashboard_router  # OLD: Cost-only dashboard
@@ -110,6 +111,7 @@ PUBLIC_EXACT = {
 PUBLIC_PREFIXES = (
     "/twilio/",     # Twilio webhooks (signature-verified below)
     "/manage/",     # Admin UI edit/delete forms (Basic Auth + CSRF in home.py)
+    "/admin/",      # New professional admin dashboard (username/password auth)
 )
 
 def _is_public(path: str) -> bool:
@@ -254,6 +256,8 @@ async def ci_health():
     )
 
 # -------- Include routers --------
+# NEW: Professional admin dashboard
+app.include_router(admin_router, prefix="/admin")
 # NEW: Unified dashboard serves "/" route
 app.include_router(unified_router)
 app.include_router(users_router)
