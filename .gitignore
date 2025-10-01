@@ -52,3 +52,11 @@ alembic/versions/*.pyc
 alembic/versions/__pycache__/
 *.env
 production*.env
+
+# ---- Security: Internal Documentation ----
+# Keep sensitive technical details internal only
+docs/internal/
+TECHNICAL_README.md
+ARCHITECTURE.md
+DEPLOYMENT.md
+INFRASTRUCTURE.md
