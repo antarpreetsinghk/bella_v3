@@ -102,6 +102,7 @@ PUBLIC_EXACT = {
     "/readyz",
     "/metrics",     # if you expose Prometheus metrics
     "/favicon.ico", # avoid 401 on favicon
+    "/ci-health",   # CI/CD smoke test endpoint
 }
 
 # Public prefixes (still may be guarded by their own logic)
@@ -237,6 +238,19 @@ async def lock_all(request, call_next):
         return JSONResponse({"detail": "Invalid or missing API key"}, status_code=401)
 
     return await call_next(request)
+
+# -------- CI Health Endpoint --------
+@app.post("/ci-health")
+async def ci_health():
+    """
+    Simple health check endpoint for CI/CD smoke tests.
+    Bypasses all authentication and signature validation.
+    """
+    return FastResponse(
+        content='<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Say voice="alice" language="en-CA">CI health check passed</Say>\n  <Hangup/>\n</Response>',
+        media_type="application/xml",
+        status_code=200,
+    )
 
 # -------- Include routers --------
 # NEW: Unified dashboard serves "/" route

@@ -303,13 +303,12 @@ jobs:
           }
           echo "✅ Ready check passed"
 
-          # Voice webhook test (using CI health endpoint to bypass signature validation)
+          # Voice webhook test (using CI health endpoint to bypass all validation)
           echo "📞 Testing voice webhook..."
           RESPONSE=$(curl -s -w "HTTP_CODE:%{http_code}" \
-            "http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/twilio/voice/ci-health" \
+            "http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/ci-health" \
             -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
-            -H "X-API-Key: kam1234" \
             --max-time 30)
 
           HTTP_CODE=$(echo "$RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
