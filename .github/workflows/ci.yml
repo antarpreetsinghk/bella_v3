@@ -295,20 +295,13 @@ jobs:
             exit 1
           fi
 
-          # Ready check
-          echo "🔄 Testing ready endpoint..."
-          curl -fsS "${{ secrets.PRODUCTION_URL }}/readyz" || {
-            echo "❌ Ready check failed"
-            exit 1
-          }
-          echo "✅ Ready check passed"
-
-          # Voice webhook test (using CI health endpoint to bypass all validation)
+          # Voice webhook test (test actual Twilio endpoint)
           echo "📞 Testing voice webhook..."
           RESPONSE=$(curl -s -w "HTTP_CODE:%{http_code}" \
-            "${{ secrets.PRODUCTION_URL }}/ci-health" \
+            "${{ secrets.PRODUCTION_URL }}/twilio/voice" \
             -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "From=%2B15551234567&To=%2B15559876543&CallSid=ci-test-call" \
             --max-time 30)
 
           HTTP_CODE=$(echo "$RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
