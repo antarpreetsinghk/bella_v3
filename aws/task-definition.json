@@ -93,6 +93,10 @@
         {
           "name": "TWILIO_PHONE_NUMBER",
           "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:TWILIO_PHONE_NUMBER::"
+        },
+        {
+          "name": "PRODUCTION_BASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:PRODUCTION_BASE_URL::"
         }
       ],
       "logConfiguration": {
