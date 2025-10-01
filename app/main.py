@@ -105,6 +105,7 @@ PUBLIC_EXACT = {
     "/metrics",     # if you expose Prometheus metrics
     "/favicon.ico", # avoid 401 on favicon
     "/ci-health",   # CI/CD smoke test endpoint
+    "/admin",       # Admin dashboard root (custom auth)
 }
 
 # Public prefixes (still may be guarded by their own logic)
