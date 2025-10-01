@@ -250,10 +250,12 @@ async def voice_collect(
                 cache_ttl=1800  # 30 minutes cache
             )
 
-            # Step 2: TEMPORARY - Use simple fallbacks for speed
+            # Step 2: Use sophisticated extraction functions
             if sess.step == "ask_name":
-                # Simple name extraction - just use cleaned speech
-                extracted_info["name"] = cleaned_speech.strip()
+                # Use Canadian name extraction for better accuracy
+                from app.services.canadian_extraction import extract_canadian_name
+                extracted_name = await extract_canadian_name(cleaned_speech)
+                extracted_info["name"] = extracted_name if extracted_name else None
 
             elif sess.step == "ask_mobile":
                 # Use existing fast phone extraction
@@ -316,23 +318,39 @@ async def voice_collect(
         # Use specialized name extractor result
         extracted_name = extracted_info.get("name")
 
-        # Fallback to treating cleaned speech as name if extraction failed
+        # Better fallback logic for name extraction
         if not extracted_name and cleaned_speech:
-            extracted_name = " ".join(cleaned_speech.split())
-        elif not extracted_name:
-            extracted_name = " ".join(speech.split())
+            # Only use fallback if it looks like a reasonable name
+            words = cleaned_speech.split()
+            if (len(words) >= 1 and len(words) <= 4 and
+                all(len(w) >= 2 and w.replace("'", "").isalpha() for w in words) and
+                not any(bad_word in cleaned_speech.lower() for bad_word in
+                       ["so what", "what", "yes", "no", "hello", "hi", "appointment", "book"])):
+                extracted_name = " ".join(words).title()
+                logger.info("[ask_name] using fallback name extraction: '%s'", extracted_name)
+            else:
+                logger.info("[ask_name] fallback rejected, poor name quality: '%s'", cleaned_speech)
 
-        sess.data["full_name"] = extracted_name
-        logger.info("[ask_name] final name: '%s' (from speech: '%s')",
-                   sess.data["full_name"], speech)
+        # Only proceed if we have a valid name
+        if extracted_name and len(extracted_name.strip()) >= 2:
+            sess.data["full_name"] = extracted_name
+            logger.info("[ask_name] final name: '%s' (from speech: '%s')",
+                       sess.data["full_name"], speech)
 
-        # Move to name confirmation step
-        sess.step = "confirm_name"
-        save_session(sess)  # Persist state change
-        logger.info("[session_debug] after ask_name step=%s data=%s", sess.step, sess.data)
-        return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+            # Move to name confirmation step
+            sess.step = "confirm_name"
+            save_session(sess)  # Persist state change
+            logger.info("[session_debug] after ask_name step=%s data=%s", sess.step, sess.data)
+            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 {_gather_block(f"I heard '{sess.data['full_name']}'. Is that correct? Please say Yes or No.")}
+</Response>""")
+        else:
+            # No valid name extracted, ask again
+            logger.info("[ask_name] no valid name extracted from: '%s', asking again", speech)
+            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+{_gather_block("I'm sorry—I didn't catch your name clearly. Could you please tell me your full name again?")}
 </Response>""")
 
     if sess.step == "confirm_name":
