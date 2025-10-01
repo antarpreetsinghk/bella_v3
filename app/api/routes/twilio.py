@@ -533,5 +533,18 @@ async def voice_collect(
     sess.step = "ask_name"
     return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Let’s start over. Could you please tell me your full name?")}
+{_gather_block("Let's start over. Could you please tell me your full name?")}
+</Response>""")
+
+
+@router.post("/voice/ci-health")
+async def voice_ci_health():
+    """
+    Simple health check endpoint for CI/CD smoke tests.
+    Bypasses Twilio signature validation and returns a basic TwiML response.
+    """
+    return _twiml("""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice" language="en-CA">CI health check passed</Say>
+  <Hangup/>
 </Response>""")
