@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import os, secrets, hmac, hashlib, base64
 from fastapi import APIRouter, Depends, Response, Form, Request, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
@@ -163,7 +164,7 @@ async def dashboard(_: bool = Depends(require_admin), db: AsyncSession = Depends
         )
     )).scalar_one()
 
-    # ALL appointments (past + future), joined with users, ordered newest first
+    # ALL appointments (past + future), joined with users, ordered by newest bookings first
     all_q = (
         sa.select(
             Appointment.id,
@@ -176,7 +177,7 @@ async def dashboard(_: bool = Depends(require_admin), db: AsyncSession = Depends
             User.id.label("user_id"),
         )
         .join(User, User.id == Appointment.user_id)
-        .order_by(Appointment.starts_at.desc())
+        .order_by(Appointment.created_at.desc())
     )
     rows = (await db.execute(all_q)).all()
 
@@ -234,7 +235,7 @@ async def dashboard(_: bool = Depends(require_admin), db: AsyncSession = Depends
 
 {table_html}
 
-<footer class="muted">Local time zone: America/Edmonton. Showing all appointments (newest first).</footer>
+<footer class="muted">Local time zone: America/Edmonton. Showing all appointments (newest bookings first).</footer>
 """
     return Response(content=_layout(body), media_type="text/html")
 
@@ -358,6 +359,12 @@ async def edit_appointment_save(
 
     # Redirect back to dashboard
     return Response(status_code=303, headers={"Location": "/"})
+
+@router.get("/manage/csrf-token", include_in_schema=False)
+async def get_csrf_token(_: bool = Depends(require_admin)) -> Response:
+    """Get CSRF token for forms"""
+    token = _csrf_make(ADMIN_USER)
+    return JSONResponse({"token": token})
 
 @router.post("/manage/appointments/{appt_id}/delete", include_in_schema=False)
 async def delete_appointment(

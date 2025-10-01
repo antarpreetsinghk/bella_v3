@@ -490,6 +490,48 @@ def _unified_layout(body: str, title: str = "Bella Operations Center") -> str:
             // Update system content dynamically
             console.log('System data:', data);
         }}
+
+        // Delete appointment function
+        async function deleteAppointment(appointmentId) {{
+            if (!confirm('Are you sure you want to delete this appointment? This cannot be undone.')) {{
+                return;
+            }}
+
+            try {{
+                // Get CSRF token from API
+                const csrfResponse = await fetch('/old/manage/csrf-token', {{
+                    headers: {{ 'Authorization': 'Basic ' + btoa('antar:kam1234') }}
+                }});
+
+                if (!csrfResponse.ok) {{
+                    throw new Error('Failed to get CSRF token');
+                }}
+
+                const csrfData = await csrfResponse.json();
+                const csrfToken = csrfData.token;
+
+                // Create form data
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+
+                // Submit delete request
+                const deleteResponse = await fetch(`/old/manage/appointments/${{appointmentId}}/delete`, {{
+                    method: 'POST',
+                    headers: {{ 'Authorization': 'Basic ' + btoa('antar:kam1234') }},
+                    body: formData
+                }});
+
+                if (deleteResponse.ok) {{
+                    // Reload the page to refresh the appointment list
+                    window.location.reload();
+                }} else {{
+                    alert('Failed to delete appointment. Please try again.');
+                }}
+            }} catch (error) {{
+                console.error('Delete error:', error);
+                alert('Error deleting appointment. Please try again.');
+            }}
+        }}
     </script>
 </body>
 </html>"""
@@ -556,7 +598,7 @@ async def _get_operations_data(db: AsyncSession) -> Dict[str, Any]:
             User.mobile,
         )
         .join(User, User.id == Appointment.user_id)
-        .order_by(Appointment.starts_at.desc())
+        .order_by(Appointment.created_at.desc())
         .limit(10)
     )
     recent_appointments = (await db.execute(recent_q)).all()
@@ -592,7 +634,7 @@ def _render_operations_tab(data: Dict[str, Any]) -> str:
     </div>
     """
 
-    # Recent appointments table
+    # Recent bookings table (ordered by creation time)
     if not data['recent_appointments']:
         table_html = '<div class="card"><p class="text-muted">No appointments yet. Book one via the phone flow or API.</p></div>'
     else:
@@ -611,8 +653,8 @@ def _render_operations_tab(data: Dict[str, Any]) -> str:
                 <td>{appt.full_name}</td>
                 <td class="text-muted">{appt.mobile}</td>
                 <td>
-                    <a href="#" class="btn btn-primary">Edit</a>
-                    <a href="#" class="btn btn-danger">Delete</a>
+                    <a href="/old/manage/appointments/{appt.id}/edit" class="btn btn-primary">Edit</a>
+                    <button class="btn btn-danger" onclick="deleteAppointment({appt.id})">Delete</button>
                 </td>
             </tr>
             """)
