@@ -81,6 +81,18 @@
         {
           "name": "REDIS_URL",
           "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:REDIS_URL::"
+        },
+        {
+          "name": "APP_ENV",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:APP_ENV::"
+        },
+        {
+          "name": "TWILIO_ACCOUNT_SID",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:TWILIO_ACCOUNT_SID::"
+        },
+        {
+          "name": "TWILIO_PHONE_NUMBER",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:TWILIO_PHONE_NUMBER::"
         }
       ],
       "logConfiguration": {
