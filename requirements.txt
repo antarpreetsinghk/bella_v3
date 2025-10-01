@@ -6,6 +6,7 @@ pydantic==2.11.7
 pydantic-settings==2.10.1
 httpx==0.28.1
 python-multipart==0.0.20
+urllib3==2.5.0  # Security fix for GHSA-pq67-6m6q-mj2v
 alembic==1.16.4
 twilio==9.8.0
 itsdangerous==2.2.0
@@ -36,7 +37,7 @@ redis==5.0.1
 
 # Google Calendar Integration
 google-api-python-client==2.100.0
-google-auth==2.21.0
+google-auth==2.41.1
 google-auth-oauthlib==1.0.0
 google-auth-httplib2==0.1.0
 
