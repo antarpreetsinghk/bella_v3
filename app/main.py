@@ -93,6 +93,7 @@ BELLA_API_KEY = os.getenv("BELLA_API_KEY", "")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 APP_ENV = os.getenv("APP_ENV", "production")
+PRODUCTION_BASE_URL = os.getenv("PRODUCTION_BASE_URL", "https://api.example.com")
 TEST_MODE = APP_ENV.lower() in ("test", "testing", "development")
 
 # Public paths (do NOT require X-API-Key here)
@@ -153,8 +154,8 @@ async def lock_all(request, call_next):
                 possible_urls = [
                     received_url,  # Original
                     received_url.replace("http://", "https://"),  # HTTPS version
-                    "https://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/twilio/voice",  # Direct HTTPS
-                    "https://bella-alb-1924818779.ca-central-1.elb.amazonaws.com:443/twilio/voice",  # With port
+                    f"{PRODUCTION_BASE_URL}/twilio/voice",  # Direct HTTPS
+                    f"{PRODUCTION_BASE_URL}:443/twilio/voice",  # With port
                 ]
 
                 ok = False

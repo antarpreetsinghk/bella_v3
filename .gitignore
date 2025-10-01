@@ -60,3 +60,34 @@ TECHNICAL_README.md
 ARCHITECTURE.md
 DEPLOYMENT.md
 INFRASTRUCTURE.md
+
+# ---- Additional Security Patterns ----
+# Never commit production secrets or credentials
+*secret*
+*password*
+*credential*
+*private*
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*backup*
+*.bak
+*.tmp
+*dump*
+*export*
+
+# Production-specific files
+production.*
+*-production.*
+*production*.env
+*prod*.env
+aws-*.env
+*aws*.env
+.env.local*
+
+# Database files and backups
+*.sql
+*.dump
+*.backup

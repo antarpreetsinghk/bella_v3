@@ -269,8 +269,8 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: bella-prod-service
-          cluster: bella-prod-cluster
+          service: ${{ secrets.ECS_SERVICE_NAME }}
+          cluster: ${{ secrets.ECS_CLUSTER_NAME }}
           wait-for-service-stability: true
 
       - name: Run production smoke tests
@@ -281,7 +281,7 @@ jobs:
           # Health check with retry
           echo "🎯 Testing health endpoint..."
           for i in $(seq 1 20); do
-            if curl -fsS "http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/healthz" >/dev/null 2>&1; then
+            if curl -fsS "${{ secrets.PRODUCTION_URL }}/healthz" >/dev/null 2>&1; then
               echo "✅ Health check passed"
               HEALTH_OK=true
               break
@@ -297,7 +297,7 @@ jobs:
 
           # Ready check
           echo "🔄 Testing ready endpoint..."
-          curl -fsS "http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/readyz" || {
+          curl -fsS "${{ secrets.PRODUCTION_URL }}/readyz" || {
             echo "❌ Ready check failed"
             exit 1
           }
@@ -306,7 +306,7 @@ jobs:
           # Voice webhook test (using CI health endpoint to bypass all validation)
           echo "📞 Testing voice webhook..."
           RESPONSE=$(curl -s -w "HTTP_CODE:%{http_code}" \
-            "http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/ci-health" \
+            "${{ secrets.PRODUCTION_URL }}/ci-health" \
             -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
             --max-time 30)
