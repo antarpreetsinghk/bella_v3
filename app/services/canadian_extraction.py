@@ -474,7 +474,19 @@ def validate_canadian_name_context(speech: str, extracted_name: str) -> tuple[bo
             logger.debug("[name_validation] rejected appointment phrase: '%s' in '%s'", phrase, cleaned_name)
             return False, extracted_name
 
-    # 4. CANADIAN NAME CHARACTERISTICS VALIDATION
+    # 4. SPEECH ARTIFACT REJECTION (specific problematic patterns)
+    speech_artifacts = [
+        'so what', 'what', 'so', 'pit', 'pit called', 'called', 'cold', 'her', 'him',
+        'my name', 'calling', 'speaking', 'hello', 'hi', 'hey', 'thanks', 'thank you',
+        'please', 'uh', 'um', 'ah', 'oh', 'okay', 'ok', 'yes', 'no', 'yeah', 'yep'
+    ]
+
+    for artifact in speech_artifacts:
+        if extracted_lower == artifact or extracted_lower.startswith(f"{artifact} ") or extracted_lower.endswith(f" {artifact}"):
+            logger.debug("[name_validation] rejected speech artifact: '%s' matches '%s'", cleaned_name, artifact)
+            return False, extracted_name
+
+    # 5. CANADIAN NAME CHARACTERISTICS VALIDATION
     words = cleaned_name.split()
 
     # Must have 1-4 words (covers most Canadian naming conventions)
@@ -555,6 +567,7 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
 
         # Remove trigger phrases to isolate name
         trigger_patterns = [
+            r'^(hi|hello|hey)\s*[.,]*\s*',  # Remove greetings at start
             r'\b(my (?:full )?name is|i\'m|this is|i am|it\'s|it is)\s*[.,]*\s*',
             r'\b(calling|speaking)\s*$'
         ]
@@ -564,9 +577,17 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
 
         if cleaned and len(cleaned) > 2:
             name = HumanName(cleaned)
+
+            # Handle both single names and full names
             if name.first and name.last:
                 result = f"{name.first} {name.last}".title()
+            elif name.first and len(name.first) >= 2:
+                # Single name case (like "Kamal")
+                result = name.first.title()
+            else:
+                result = None
 
+            if result:
                 # CANADIAN MULTILINGUAL VALIDATION
                 is_valid, cleaned_result = validate_canadian_name_context(speech, result)
                 if not is_valid:
