@@ -1079,6 +1079,47 @@ def render_status_distribution(status_distribution: Dict[str, int]) -> str:
     </div>
     """
 
+@router.post("/cleanup-so-what")
+async def cleanup_so_what_names(
+    username: str = Depends(require_admin_auth),
+    db: AsyncSession = Depends(get_session)
+):
+    """Clean up 'So What' customer names in the database"""
+    try:
+        # Find all users with 'So What' names
+        result = await db.execute(
+            sa.select(User).where(
+                sa.or_(
+                    User.full_name.ilike('%so what%'),
+                    User.full_name.ilike('%sowhat%'),
+                    User.full_name == 'So What'
+                )
+            )
+        )
+        so_what_users = result.scalars().all()
+
+        updated_count = 0
+        for user in so_what_users:
+            # Update to a generic placeholder name
+            user.full_name = "Customer (Name Correction Needed)"
+            updated_count += 1
+
+        await db.commit()
+
+        return {
+            "success": True,
+            "updated_count": updated_count,
+            "message": f"Updated {updated_count} 'So What' entries to placeholder names"
+        }
+
+    except Exception as e:
+        await db.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to cleanup 'So What' names"
+        }
+
 def render_booking_trends(daily_trends: List[Dict[str, Any]]) -> str:
     """Render booking trends chart"""
     if not daily_trends:
