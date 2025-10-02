@@ -16,6 +16,8 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from app.utils.secrets import get_config_value, is_feature_enabled
+
 logger = logging.getLogger(__name__)
 
 LOCAL_TZ = ZoneInfo("America/Edmonton")
@@ -33,13 +35,13 @@ def get_calendar_service():
         return _calendar_service
 
     try:
-        # Check if Google Calendar is enabled via environment variable
-        if not os.getenv("GOOGLE_CALENDAR_ENABLED", "").lower() in ("true", "1", "yes"):
+        # Check if Google Calendar is enabled via configuration (env var or secrets)
+        if not is_feature_enabled("GOOGLE_CALENDAR_ENABLED"):
             logger.info("Google Calendar integration disabled via GOOGLE_CALENDAR_ENABLED")
             return None
 
-        # Get service account credentials from environment
-        service_account_info = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+        # Get service account credentials from configuration (env var or secrets)
+        service_account_info = get_config_value("GOOGLE_SERVICE_ACCOUNT_JSON")
         if not service_account_info:
             logger.warning("GOOGLE_SERVICE_ACCOUNT_JSON not set, calendar integration disabled")
             return None
@@ -104,15 +106,17 @@ async def create_calendar_event(
 
         # Use primary calendar if none specified
         if not calendar_id:
-            calendar_id = os.getenv("GOOGLE_CALENDAR_ID", "primary")
+            calendar_id = get_config_value("GOOGLE_CALENDAR_ID", "primary")
 
         # Prepare event data
         event_summary = f"Appointment with {user_name}"
+        business_email = get_config_value("BUSINESS_EMAIL", "doctor@practice.com")
         event_description = f"""
 Appointment Details:
 • Client: {user_name}
 • Phone: {user_mobile}
 • Duration: {duration_min} minutes
+• Contact: {business_email}
 • Booked via Bella Voice System
 
 {f"Notes: {notes}" if notes else ""}
@@ -129,13 +133,8 @@ Appointment Details:
                 'dateTime': ends_at_utc.isoformat(),
                 'timeZone': 'UTC',
             },
-            'attendees': [
-                {
-                    'email': os.getenv("BUSINESS_EMAIL", ""),
-                    'displayName': "Bella Services",
-                    'responseStatus': 'accepted'
-                }
-            ],
+            # Note: Service accounts cannot invite attendees without Domain-Wide Delegation
+            # The business email will be included in the description instead
             'reminders': {
                 'useDefault': False,
                 'overrides': [
@@ -144,6 +143,7 @@ Appointment Details:
                 ],
             },
             'colorId': '9',  # Blue color for appointments
+            'visibility': 'public',  # Make details visible to subscribers
         }
 
         # Create the event
@@ -257,11 +257,13 @@ async def update_calendar_event(
 
         # Prepare updated event data
         event_summary = f"Appointment with {user_name}"
+        business_email = os.getenv("BUSINESS_EMAIL", "doctor@practice.com")
         event_description = f"""
 Appointment Details:
 • Client: {user_name}
 • Phone: {user_mobile}
 • Duration: {duration_min} minutes
+• Contact: {business_email}
 • Booked via Bella Voice System
 
 {f"Notes: {notes}" if notes else ""}
