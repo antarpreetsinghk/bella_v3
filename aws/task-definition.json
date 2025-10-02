@@ -97,6 +97,22 @@
         {
           "name": "PRODUCTION_BASE_URL",
           "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:PRODUCTION_BASE_URL::"
+        },
+        {
+          "name": "GOOGLE_CALENDAR_ENABLED",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:GOOGLE_CALENDAR_ENABLED::"
+        },
+        {
+          "name": "GOOGLE_CALENDAR_ID",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:GOOGLE_CALENDAR_ID::"
+        },
+        {
+          "name": "BUSINESS_EMAIL",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:BUSINESS_EMAIL::"
+        },
+        {
+          "name": "GOOGLE_SERVICE_ACCOUNT_JSON",
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:GOOGLE_SERVICE_ACCOUNT_JSON::"
         }
       ],
       "logConfiguration": {
