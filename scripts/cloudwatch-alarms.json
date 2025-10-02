@@ -1,0 +1,170 @@
+{
+  "alarms": [
+    {
+      "alarm_name": "Bella-API-HighErrorRate",
+      "description": "API error rate exceeds 5% threshold",
+      "metric_name": "ErrorRate",
+      "namespace": "Bella/API",
+      "statistic": "Average",
+      "threshold": 5.0,
+      "comparison_operator": "GreaterThanThreshold",
+      "evaluation_periods": 2,
+      "period": 300,
+      "datapoints_to_alarm": 2,
+      "treat_missing_data": "notBreaching",
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-critical-alerts"
+      ],
+      "dimensions": [
+        {"Name": "Environment", "Value": "${ENVIRONMENT}"},
+        {"Name": "Service", "Value": "bella-v3"}
+      ]
+    },
+    {
+      "alarm_name": "Bella-API-HighLatency",
+      "description": "API response time exceeds 2 seconds",
+      "metric_name": "ResponseTime",
+      "namespace": "Bella/API",
+      "statistic": "Average",
+      "threshold": 2000.0,
+      "comparison_operator": "GreaterThanThreshold",
+      "evaluation_periods": 3,
+      "period": 300,
+      "datapoints_to_alarm": 2,
+      "treat_missing_data": "notBreaching",
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-warning-alerts"
+      ]
+    },
+    {
+      "alarm_name": "Bella-Services-OpenAI-Latency",
+      "description": "OpenAI API latency exceeds 5 seconds",
+      "metric_name": "OpenAIAPILatency",
+      "namespace": "Bella/Services",
+      "statistic": "Average",
+      "threshold": 5000.0,
+      "comparison_operator": "GreaterThanThreshold",
+      "evaluation_periods": 2,
+      "period": 300,
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-critical-alerts"
+      ]
+    },
+    {
+      "alarm_name": "Bella-Services-ExtractionAccuracy",
+      "description": "Name extraction accuracy below 85%",
+      "metric_name": "ExtractionAccuracy",
+      "namespace": "Bella/Services",
+      "statistic": "Average",
+      "threshold": 85.0,
+      "comparison_operator": "LessThanThreshold",
+      "evaluation_periods": 3,
+      "period": 600,
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-warning-alerts"
+      ]
+    },
+    {
+      "alarm_name": "Bella-Database-ConnectionPool",
+      "description": "Database connection pool usage exceeds 80%",
+      "metric_name": "ConnectionPoolUsage",
+      "namespace": "Bella/Database",
+      "statistic": "Average",
+      "threshold": 80.0,
+      "comparison_operator": "GreaterThanThreshold",
+      "evaluation_periods": 2,
+      "period": 300,
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-critical-alerts"
+      ]
+    },
+    {
+      "alarm_name": "Bella-Database-QueryLatency",
+      "description": "Database query latency exceeds 1 second",
+      "metric_name": "QueryLatency",
+      "namespace": "Bella/Database",
+      "statistic": "Average",
+      "threshold": 1000.0,
+      "comparison_operator": "GreaterThanThreshold",
+      "evaluation_periods": 3,
+      "period": 300,
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-warning-alerts"
+      ]
+    },
+    {
+      "alarm_name": "Bella-Voice-RecognitionAccuracy",
+      "description": "Speech recognition accuracy below 90%",
+      "metric_name": "SpeechRecognitionAccuracy",
+      "namespace": "Bella/Voice",
+      "statistic": "Average",
+      "threshold": 90.0,
+      "comparison_operator": "LessThanThreshold",
+      "evaluation_periods": 3,
+      "period": 600,
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-warning-alerts"
+      ]
+    },
+    {
+      "alarm_name": "Bella-AI-ArtifactFiltering",
+      "description": "Artifact filtering effectiveness below 95%",
+      "metric_name": "ArtifactFilteringEffectiveness",
+      "namespace": "Bella/AI",
+      "statistic": "Average",
+      "threshold": 95.0,
+      "comparison_operator": "LessThanThreshold",
+      "evaluation_periods": 2,
+      "period": 600,
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-warning-alerts"
+      ]
+    },
+    {
+      "alarm_name": "Bella-Core-SystemHealth",
+      "description": "Overall system health degraded",
+      "metric_name": "SystemHealth",
+      "namespace": "Bella/Core",
+      "statistic": "Average",
+      "threshold": 80.0,
+      "comparison_operator": "LessThanThreshold",
+      "evaluation_periods": 2,
+      "period": 300,
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-critical-alerts"
+      ]
+    },
+    {
+      "alarm_name": "Bella-Admin-DashboardLatency",
+      "description": "Admin dashboard load time exceeds 3 seconds",
+      "metric_name": "DashboardLoadTime",
+      "namespace": "Bella/Admin",
+      "statistic": "Average",
+      "threshold": 3000.0,
+      "comparison_operator": "GreaterThanThreshold",
+      "evaluation_periods": 3,
+      "period": 300,
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-warning-alerts"
+      ]
+    }
+  ],
+  "composite_alarms": [
+    {
+      "alarm_name": "Bella-Overall-SystemHealth",
+      "description": "Composite alarm for overall system health",
+      "alarm_rule": "ALARM('Bella-API-HighErrorRate') OR ALARM('Bella-Database-ConnectionPool') OR ALARM('Bella-Core-SystemHealth')",
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-critical-alerts"
+      ]
+    },
+    {
+      "alarm_name": "Bella-AI-Processing-Health",
+      "description": "Composite alarm for AI processing components",
+      "alarm_rule": "ALARM('Bella-Services-ExtractionAccuracy') OR ALARM('Bella-Voice-RecognitionAccuracy') OR ALARM('Bella-AI-ArtifactFiltering')",
+      "alarm_actions": [
+        "arn:aws:sns:ca-central-1:YOUR_ACCOUNT:bella-warning-alerts"
+      ]
+    }
+  ]
+}

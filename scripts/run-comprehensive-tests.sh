@@ -54,7 +54,7 @@ import statistics
 from datetime import datetime
 
 print('⚡ Testing production API performance...')
-url = 'http://bella-alb-1924818779.ca-central-1.elb.amazonaws.com/healthz'
+url = 'https://your-production-domain.com/healthz'
 response_times = []
 
 for i in range(10):

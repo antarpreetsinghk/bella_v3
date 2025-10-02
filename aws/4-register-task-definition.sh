@@ -5,8 +5,8 @@ set -e
 echo "📋 Registering ECS Task Definition for Bella V3..."
 
 # Variables - UPDATED WITH YOUR VALUES
-ACCOUNT_ID="291878986264"                                                    # Your AWS Account ID
-ECR_REPO_URI="291878986264.dkr.ecr.ca-central-1.amazonaws.com/bella-v3"    # Your ECR repository URI
+ACCOUNT_ID="YOUR_AWS_ACCOUNT_ID"                                                    # Your AWS Account ID
+ECR_REPO_URI="YOUR_AWS_ACCOUNT_ID.dkr.ecr.ca-central-1.amazonaws.com/bella-v3"    # Your ECR repository URI
 REGION="ca-central-1"
 
 # Update task definition with actual account ID and ECR URI

@@ -6,8 +6,8 @@ echo "🔍 Setting up Bella V3 Monitoring & Alerting..."
 # Configuration
 CLUSTER_NAME="bella-prod-cluster"
 SERVICE_NAME="bella-prod-service"
-ALB_ARN="arn:aws:elasticloadbalancing:ca-central-1:291878986264:loadbalancer/app/bella-alb/860e7f1e4da4eb7b"
-TG_ARN="arn:aws:elasticloadbalancing:ca-central-1:291878986264:targetgroup/bella-tg/26716742b615a65b"
+ALB_ARN="arn:aws:elasticloadbalancing:ca-central-1:YOUR_AWS_ACCOUNT_ID:loadbalancer/app/your-alb/your-alb-id"
+TG_ARN="arn:aws:elasticloadbalancing:ca-central-1:YOUR_AWS_ACCOUNT_ID:targetgroup/your-tg/your-tg-id"
 LOG_GROUP="/ecs/bella-prod"
 
 # Create SNS topic for alerts

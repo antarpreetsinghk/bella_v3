@@ -100,7 +100,7 @@ function show_metrics() {
     print_header "Application Metrics"
 
     # Get metrics from the /metrics endpoint
-    ALB_DNS="bella-alb-1924818779.ca-central-1.elb.amazonaws.com"
+    ALB_DNS="your-production-alb.ca-central-1.elb.amazonaws.com"
 
     if curl -fsS "http://$ALB_DNS/metrics" | jq . 2>/dev/null; then
         print_success "Metrics retrieved successfully"
@@ -124,7 +124,7 @@ function show_metrics() {
 function check_health() {
     print_header "Service Health Check"
 
-    ALB_DNS="bella-alb-1924818779.ca-central-1.elb.amazonaws.com"
+    ALB_DNS="your-production-alb.ca-central-1.elb.amazonaws.com"
 
     # Check health endpoint
     if curl -fsS "http://$ALB_DNS/healthz" | jq . 2>/dev/null; then
@@ -147,7 +147,7 @@ function check_health() {
     # Check target group health
     print_header "Target Group Health"
     aws elbv2 describe-target-health \
-        --target-group-arn "arn:aws:elasticloadbalancing:ca-central-1:291878986264:targetgroup/bella-tg/26716742b615a65b" \
+        --target-group-arn "arn:aws:elasticloadbalancing:ca-central-1:YOUR_AWS_ACCOUNT_ID:targetgroup/your-tg/your-tg-id" \
         --query 'TargetHealthDescriptions[*].{Target:Target.Id,Port:Target.Port,Health:TargetHealth.State}' \
         --output table \
         --region "$REGION" || {

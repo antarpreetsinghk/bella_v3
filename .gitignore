@@ -91,3 +91,32 @@ aws-*.env
 *.sql
 *.dump
 *.backup
+
+# ---- Sensitive Files ----
+# Never commit these types of files
+*cookies.txt
+*session*
+*auth_token*
+*api_key*
+vulnerability-report.json
+security-report.*
+audit-*.json
+
+# AWS and Cloud Credentials
+aws-credentials.*
+.aws/
+*ec2*
+*rds*
+*ecs*
+*elb*
+
+# Monitoring and logs that may contain sensitive data
+monitoring/*.json
+logs/
+*.log
+*access.log*
+*error.log*
+
+# Claude AI settings that may contain credentials
+.claude/settings.local.json
+.claude/**/settings.local.json
