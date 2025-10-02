@@ -25,7 +25,7 @@ from app.services.redis_session import get_session as get_call_session, reset_se
 from app.services.whisper_stt import transcribe_with_cache
 from app.services.business_metrics import business_metrics
 from app.services.llm import extract_appointment_fields, clean_and_enhance_speech, unified_appointment_extraction
-from app.services.booking import _parse_to_utc as parse_to_utc  # reuse future-only guard
+from app.services.booking import _parse_to_utc as parse_to_utc, book_from_transcript  # reuse future-only guard
 from app.crud.user import get_user_by_mobile, create_user
 from app.crud.appointment import create_appointment_unique
 from app.core.performance import performance_middleware, ResponseOptimizer
@@ -523,20 +523,39 @@ async def voice_collect(
 {_gather_block("I’m missing " + ", ".join(missing) + ". Let’s try again.")}
 </Response>""")
 
-                # Validate via Pydantic; create/fetch user; book appointment
-                _ = UserCreate(full_name=full_name, mobile=mobile)
-                user = await get_user_by_mobile(db, mobile)
-                if not user:
-                    user = await create_user(db, UserCreate(full_name=full_name, mobile=mobile))
-                appt = await create_appointment_unique(
+                # Use booking service with Google Calendar integration
+                duration_min = int(sess.data.get("duration_min") or 30)
+                notes = speech if sess.data.get("notes") is None else sess.data.get("notes")
+
+                # Create a transcript-like summary for the booking service
+                booking_transcript = f"Name: {full_name}, Phone: {mobile}, Time: {starts_at_utc.astimezone(LOCAL_TZ).strftime('%A, %B %d at %I:%M %p')}, Duration: {duration_min} minutes"
+                if notes:
+                    booking_transcript += f", Notes: {notes}"
+
+                # Use the booking service that includes calendar integration
+                booking_result = await book_from_transcript(
                     db,
-                    user_id=user.id,
-                    starts_at_utc=starts_at_utc,
-                    duration_min=int(sess.data.get("duration_min") or 30),
-                    notes=speech if sess.data.get("notes") is None else sess.data.get("notes"),
+                    transcript=booking_transcript,
+                    from_number=mobile,
+                    locale="en-CA"
                 )
-                when = appt.starts_at.astimezone(LOCAL_TZ).strftime("%A, %B %d at %I:%M %p")
+
+                if not booking_result.created:
+                    # Booking failed, handle error
+                    reset_session(CallSid)
+                    return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>I'm sorry, there was an issue booking your appointment. {booking_result.message_for_caller}</Say>
+  <Hangup/>
+</Response>""")
+
+                # Success - extract appointment time for confirmation
+                when = starts_at_utc.astimezone(LOCAL_TZ).strftime("%A, %B %d at %I:%M %p")
                 reset_session(CallSid)
+
+                # Log successful calendar integration
+                if "calendar_event" in booking_result.echo:
+                    logger.info("[voice] Calendar event created for voice booking: %s", booking_result.echo["calendar_event"].get("event_id"))
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Thank you. Your appointment is booked for {when}. We look forward to seeing you.</Say>
