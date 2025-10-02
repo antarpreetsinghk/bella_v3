@@ -56,10 +56,24 @@ production*.env
 # ---- Security: Internal Documentation ----
 # Keep sensitive technical details internal only
 docs/internal/
+SENSITIVE_DOCS_BACKUP/
 TECHNICAL_README.md
 ARCHITECTURE.md
 DEPLOYMENT.md
+DEPLOYMENT_SUMMARY.md
+PRODUCTION_GUIDE.md
+UNIFIED_DASHBOARD.md
 INFRASTRUCTURE.md
+OPERATIONS.md
+*ARCHITECTURE*
+*DEPLOYMENT*
+*PRODUCTION*
+docs/SECURITY.md
+docs/OPERATIONS.md
+docs/DEPLOYMENT.md
+docs/monitoring-integration-guide.md
+docs/cloudwatch-architecture-overview.md
+docs/package-architecture.md
 
 # ---- Additional Security Patterns ----
 # Never commit production secrets or credentials

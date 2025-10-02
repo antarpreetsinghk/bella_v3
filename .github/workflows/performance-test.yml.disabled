@@ -89,7 +89,7 @@ EOF
           if [ "$TARGET_ENV" = "staging" ]; then
             echo "TARGET_URL=http://bella-staging-alb.ca-central-1.elb.amazonaws.com" >> $GITHUB_ENV
           else
-            echo "TARGET_URL=https://your-production-domain.com" >> $GITHUB_ENV
+            echo "TARGET_URL=https://REPLACE_WITH_YOUR_PRODUCTION_DOMAIN.com" >> $GITHUB_ENV
           fi
           echo "🎯 Target environment: $TARGET_ENV"
 

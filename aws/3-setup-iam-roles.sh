@@ -6,7 +6,7 @@ echo "🔑 Creating IAM Roles for Bella V3 ECS..."
 
 # Variables - UPDATED WITH YOUR VALUES
 REGION="ca-central-1"
-ACCOUNT_ID="YOUR_AWS_ACCOUNT_ID"  # Your AWS Account ID (12 digits)
+ACCOUNT_ID="REPLACE_WITH_YOUR_AWS_ACCOUNT_ID"  # Your AWS Account ID (12 digits)
 
 # Create ECS Task Execution Role
 echo "Creating ECS Task Execution Role..."
