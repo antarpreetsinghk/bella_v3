@@ -41,8 +41,8 @@ ADMIN_USERS = {
     }
 }
 
-# Session store (in production, use Redis)
-active_sessions = {}
+# Session secret key for token signing
+SESSION_SECRET = os.getenv("CSRF_SECRET", "bella-admin-secret-key-2024")
 
 def verify_credentials(username: str, password: str) -> Optional[Dict[str, Any]]:
     """Verify admin credentials"""
@@ -53,29 +53,68 @@ def verify_credentials(username: str, password: str) -> Optional[Dict[str, Any]]
     return None
 
 def create_session(username: str) -> str:
-    """Create a new admin session"""
-    session_id = secrets.token_urlsafe(32)
-    active_sessions[session_id] = {
-        "username": username,
-        "created_at": datetime.now(),
-        "last_activity": datetime.now()
-    }
-    return session_id
+    """Create a stateless admin session token"""
+    import time
+    import base64
+    import hmac
 
-def verify_session(session_id: Optional[str]) -> Optional[str]:
-    """Verify admin session"""
-    if not session_id or session_id not in active_sessions:
+    # Create payload with username and expiration
+    payload = f"{username}:{int(time.time())}"
+    payload_b64 = base64.b64encode(payload.encode()).decode()
+
+    # Create signature
+    signature = hmac.new(
+        SESSION_SECRET.encode(),
+        payload_b64.encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    # Return token = payload.signature
+    return f"{payload_b64}.{signature}"
+
+def verify_session(session_token: Optional[str]) -> Optional[str]:
+    """Verify stateless admin session token"""
+    if not session_token:
         return None
 
-    session = active_sessions[session_id]
-    # Session expires after 8 hours
-    if datetime.now() - session["last_activity"] > timedelta(hours=8):
-        del active_sessions[session_id]
-        return None
+    try:
+        import time
+        import base64
+        import hmac
 
-    # Update last activity
-    session["last_activity"] = datetime.now()
-    return session["username"]
+        # Split token into payload and signature
+        if '.' not in session_token:
+            return None
+
+        payload_b64, signature = session_token.split('.', 1)
+
+        # Verify signature
+        expected_signature = hmac.new(
+            SESSION_SECRET.encode(),
+            payload_b64.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not secrets.compare_digest(signature, expected_signature):
+            return None
+
+        # Decode payload
+        payload = base64.b64decode(payload_b64).decode()
+        username, timestamp_str = payload.split(':', 1)
+        timestamp = int(timestamp_str)
+
+        # Check expiration (8 hours)
+        if time.time() - timestamp > 8 * 3600:
+            return None
+
+        # Verify username still exists
+        if username not in ADMIN_USERS:
+            return None
+
+        return username
+
+    except (ValueError, TypeError, Exception):
+        return None
 
 def require_admin_auth(session_id: Optional[str] = Cookie(None, alias="admin_session")):
     """Dependency to require admin authentication"""
