@@ -125,12 +125,13 @@ async def clean_and_enhance_speech(raw_speech: str) -> str:
         f'"{raw_speech}"\n\n'
         f"Tasks:\n"
         f"1. Remove speech artifacts (um, uh, called her, etc.)\n"
-        f"2. Expand contractions (it's → it is, I'm → I am)\n"
-        f"3. Fix common Canadian speech patterns\n"
-        f"4. Handle bilingual patterns (French-English mixing)\n"
-        f"5. Standardize name introductions\n"
-        f"6. Add missing area codes if obvious (e.g., 869-5838 → 204-869-5838 for Manitoba)\n"
-        f"7. Preserve all meaningful content\n\n"
+        f"2. Remove conversational fillers (so what, what about, how about, let me see)\n"
+        f"3. Expand contractions (it's → it is, I'm → I am)\n"
+        f"4. Fix common Canadian speech patterns\n"
+        f"5. Handle bilingual patterns (French-English mixing)\n"
+        f"6. Standardize name introductions\n"
+        f"7. Add missing area codes if obvious (e.g., 869-5838 → 204-869-5838 for Manitoba)\n"
+        f"8. Preserve all meaningful content\n\n"
         f"Examples:\n"
         f'- "here, my name is antara, preet called her" → "my name is Antara Preet"\n'
         f'- "It\'s Johnny Smith" → "It is Johnny Smith"\n'
@@ -222,11 +223,14 @@ async def unified_appointment_extraction(raw_speech: str, conversation_context: 
         f"CONVERSATION CONTEXT: {conversation_context}\n\n"
         f"TASKS (all in one step):\n"
         f"1. CLEAN SPEECH: Remove artifacts (um, uh, called her), expand contractions (it's→it is)\n"
+        f"   - IGNORE conversational phrases: 'so what', 'what about', 'how about', 'let me see', 'like I said'\n"
+        f"   - These are NOT names - they are conversational fillers\n"
         f"2. INTELLIGENT NAME MATCHING: Common misheard Canadian names:\n"
         f"   - 'Interpret' or 'interpreter' → likely 'Antarpreet'\n"
         f"   - 'Until Preet' or 'under preet' → likely 'Antarpreet'\n"
         f"   - 'An Interpret' → likely 'Antarpreet'\n"
         f"   - Consider phonetic similarities for South Asian/Canadian names\n"
+        f"   - NEVER extract 'so what', 'what about', 'how about' as names\n"
         f"3. PHONE NORMALIZATION: Convert to E.164 format (+1 for Canada)\n"
         f"   - Add area code 204 for Manitoba if missing (7-digit numbers)\n"
         f"   - Clean digits, remove formatting\n"
@@ -240,6 +244,8 @@ async def unified_appointment_extraction(raw_speech: str, conversation_context: 
         f"Output: {{'full_name': 'Antarpreet', 'mobile': '+12045551234', 'starts_at': '2025-09-29T20:00:00+00:00', 'duration_min': 30, 'notes': null, 'missing': [], 'confidence': 0.9}}\n\n"
         f"Input: 'my name is until preet, 8695838'\n"
         f"Output: {{'full_name': 'Antarpreet', 'mobile': '+12048695838', 'starts_at': null, 'duration_min': 30, 'notes': null, 'missing': ['starts_at'], 'confidence': 0.8}}\n\n"
+        f"Input: 'so what time is available? I need an appointment'\n"
+        f"Output: {{'full_name': null, 'mobile': null, 'starts_at': null, 'duration_min': 30, 'notes': 'asking about available times', 'missing': ['full_name', 'mobile', 'starts_at'], 'confidence': 0.6}}\n\n"
         f"Return ONLY the JSON object:"
     )
 
