@@ -4,12 +4,12 @@
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
   "memory": "512",
-  "executionRoleArn": "arn:aws:iam::REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:role/bella-ecs-execution-role",
-  "taskRoleArn": "arn:aws:iam::REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:role/bella-ecs-task-role",
+  "executionRoleArn": "arn:aws:iam::291878986264:role/bella-ecs-execution-role",
+  "taskRoleArn": "arn:aws:iam::291878986264:role/bella-ecs-task-role",
   "containerDefinitions": [
     {
       "name": "bella-api",
-      "image": "REPLACE_WITH_YOUR_AWS_ACCOUNT_ID.dkr.ecr.ca-central-1.amazonaws.com/bella-v3:latest",
+      "image": "291878986264.dkr.ecr.ca-central-1.amazonaws.com/bella-v3:latest",
       "essential": true,
       "portMappings": [
         {
@@ -20,83 +20,83 @@
       "secrets": [
         {
           "name": "OPENAI_API_KEY",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:OPENAI_API_KEY::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:OPENAI_API_KEY::"
         },
         {
           "name": "OPENAI_MODEL",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:OPENAI_MODEL::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:OPENAI_MODEL::"
         },
         {
           "name": "REQUEST_MAX_TOKENS",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:REQUEST_MAX_TOKENS::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:REQUEST_MAX_TOKENS::"
         },
         {
           "name": "RESPONSE_MAX_TOKENS",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:RESPONSE_MAX_TOKENS::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:RESPONSE_MAX_TOKENS::"
         },
         {
           "name": "POSTGRES_HOST",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:POSTGRES_HOST::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_HOST::"
         },
         {
           "name": "POSTGRES_PORT",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:POSTGRES_PORT::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_PORT::"
         },
         {
           "name": "POSTGRES_DB",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:POSTGRES_DB::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_DB::"
         },
         {
           "name": "POSTGRES_USER",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:POSTGRES_USER::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_USER::"
         },
         {
           "name": "POSTGRES_PASSWORD",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:POSTGRES_PASSWORD::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:POSTGRES_PASSWORD::"
         },
         {
           "name": "DATABASE_URL",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:DATABASE_URL::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:DATABASE_URL::"
         },
         {
           "name": "BELLA_API_KEY",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:BELLA_API_KEY::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:BELLA_API_KEY::"
         },
         {
           "name": "ADMIN_USER",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:ADMIN_USER::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:ADMIN_USER::"
         },
         {
           "name": "ADMIN_PASS",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:ADMIN_PASS::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:ADMIN_PASS::"
         },
         {
           "name": "CSRF_SECRET",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:CSRF_SECRET::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:CSRF_SECRET::"
         },
         {
           "name": "TWILIO_AUTH_TOKEN",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:TWILIO_AUTH_TOKEN::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:TWILIO_AUTH_TOKEN::"
         },
         {
           "name": "REDIS_URL",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:REDIS_URL::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:REDIS_URL::"
         },
         {
           "name": "APP_ENV",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:APP_ENV::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:APP_ENV::"
         },
         {
           "name": "TWILIO_ACCOUNT_SID",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:TWILIO_ACCOUNT_SID::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:TWILIO_ACCOUNT_SID::"
         },
         {
           "name": "TWILIO_PHONE_NUMBER",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:TWILIO_PHONE_NUMBER::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:TWILIO_PHONE_NUMBER::"
         },
         {
           "name": "PRODUCTION_BASE_URL",
-          "valueFrom": "arn:aws:secretsmanager:ca-central-1:REPLACE_WITH_YOUR_AWS_ACCOUNT_ID:secret:bella-env-XXXXXX:PRODUCTION_BASE_URL::"
+          "valueFrom": "arn:aws:secretsmanager:ca-central-1:291878986264:secret:bella-env-82YlZa:PRODUCTION_BASE_URL::"
         }
       ],
       "logConfiguration": {
