@@ -318,18 +318,47 @@ async def voice_collect(
         # Use specialized name extractor result
         extracted_name = extracted_info.get("name")
 
-        # Better fallback logic for name extraction
+        # Enhanced fallback logic for name extraction with comprehensive speech artifact rejection
         if not extracted_name and cleaned_speech:
             # Only use fallback if it looks like a reasonable name
             words = cleaned_speech.split()
+            cleaned_lower = cleaned_speech.lower().strip()
+
+            # Comprehensive bad word/phrase detection
+            bad_patterns = [
+                # Direct speech artifacts
+                "so what", "sowhat", "so", "what", "what about", "how about",
+                # Questions and responses
+                "yes", "no", "yeah", "yep", "nope", "okay", "ok",
+                # Greetings and politeness
+                "hello", "hi", "hey", "thanks", "thank you", "please",
+                # Appointment-related words
+                "appointment", "book", "booking", "schedule", "time",
+                # Speech fillers
+                "um", "uh", "ah", "oh", "well", "like", "you know",
+                # Common misinterpretations
+                "called", "calling", "speaking", "pit", "pit called",
+                "cold", "her", "him", "that", "this", "with", "for"
+            ]
+
+            # Check if the cleaned speech matches any bad patterns
+            is_bad_speech = any(bad_pattern in cleaned_lower for bad_pattern in bad_patterns)
+
+            # Additional check: if the entire phrase is just bad words
+            all_words_bad = all(word.lower() in bad_patterns for word in words)
+
+            # Check for question patterns that indicate non-name speech
+            question_patterns = ["can you", "could you", "will you", "do you", "are you"]
+            is_question = any(pattern in cleaned_lower for pattern in question_patterns)
+
             if (len(words) >= 1 and len(words) <= 4 and
                 all(len(w) >= 2 and w.replace("'", "").isalpha() for w in words) and
-                not any(bad_word in cleaned_speech.lower() for bad_word in
-                       ["so what", "what", "yes", "no", "hello", "hi", "appointment", "book"])):
+                not is_bad_speech and not all_words_bad and not is_question):
                 extracted_name = " ".join(words).title()
                 logger.info("[ask_name] using fallback name extraction: '%s'", extracted_name)
             else:
-                logger.info("[ask_name] fallback rejected, poor name quality: '%s'", cleaned_speech)
+                logger.info("[ask_name] fallback rejected, poor name quality: '%s' (bad_speech=%s, all_bad=%s, question=%s)",
+                           cleaned_speech, is_bad_speech, all_words_bad, is_question)
 
         # Only proceed if we have a valid name
         if extracted_name and len(extracted_name.strip()) >= 2:
