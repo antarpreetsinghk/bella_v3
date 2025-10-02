@@ -441,11 +441,6 @@ async def admin_login_page():
             <button type="submit" class="btn btn-primary w-100">Sign In</button>
         </form>
 
-        <div class="mt-4 text-center">
-            <small class="text-muted">
-                Demo: admin/admin123 or manager/manager123
-            </small>
-        </div>
     </div>
 </body>
 </html>""")
@@ -590,8 +585,7 @@ async def get_recent_appointments(db: AsyncSession, limit: int = 20) -> List[Any
             Appointment.notes,
             Appointment.created_at,
             User.full_name,
-            User.mobile,
-            User.email
+            User.mobile
         )
         .join(User, User.id == Appointment.user_id)
         .order_by(desc(Appointment.created_at))
@@ -879,12 +873,11 @@ async def get_recent_users(db: AsyncSession, limit: int = 50) -> List[Any]:
             User.id,
             User.full_name,
             User.mobile,
-            User.email,
             User.created_at,
             func.count(Appointment.id).label('appointment_count')
         )
         .outerjoin(Appointment, User.id == Appointment.user_id)
-        .group_by(User.id, User.full_name, User.mobile, User.email, User.created_at)
+        .group_by(User.id, User.full_name, User.mobile, User.created_at)
         .order_by(desc(User.created_at))
         .limit(limit)
     )
@@ -916,7 +909,7 @@ def render_users_table(users: List[Any]) -> str:
             </td>
             <td>
                 <strong>{user.full_name or 'Unknown'}</strong><br>
-                <small class="text-muted">{user.email or 'No email'}</small>
+                <small class="text-muted">Customer</small>
             </td>
             <td>
                 <strong>{user.mobile}</strong>
