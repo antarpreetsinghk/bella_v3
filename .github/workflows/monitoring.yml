@@ -118,7 +118,7 @@ jobs:
         EOF
 
     - name: Upload cost report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: cost-report-$(date +%Y%m%d)
         path: cost-report.md
