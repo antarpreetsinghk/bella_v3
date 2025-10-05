@@ -191,17 +191,22 @@ jobs:
     if: always()
 
     steps:
+    - name: Setup SSH key for cleanup
+      if: needs.build-and-deploy.result == 'success'
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/bella-key.pem
+        chmod 600 ~/.ssh/bella-key.pem
+        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
     - name: Cleanup old Docker images
       if: needs.build-and-deploy.result == 'success'
       run: |
         ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
-          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
+          ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
           # Remove old Docker images to save space
           docker image prune -f
           docker volume prune -f
 
           echo "🧹 Cleanup completed"
         EOF
-      env:
-        EC2_HOST: ${{ secrets.EC2_HOST }}
-        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
