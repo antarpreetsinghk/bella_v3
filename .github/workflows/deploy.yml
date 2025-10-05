@@ -96,8 +96,13 @@ jobs:
           --exclude='node_modules/' \
           --exclude='*.log' \
           --exclude='.env.local' \
+          --exclude='.env' \
           -e "ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no" \
           ./ ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/bella_v3/
+
+        # Copy .env file separately to ensure it's a file, not directory
+        scp -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
+          .env ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/bella_v3/.env
 
         # Execute deployment on EC2
         ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
