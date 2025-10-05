@@ -110,28 +110,25 @@ jobs:
         scp -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
           .env ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/bella_v3/.env
 
-        # Execute deployment on EC2
+        # Build Docker image on EC2
         ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
-          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
-          cd ~/bella_v3
+          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
+          "cd ~/bella_v3 && docker build -f Dockerfile.cost-optimized -t bella-v3:cost-optimized ."
 
-          # Build new Docker image
-          docker build -f Dockerfile.cost-optimized -t bella-v3:cost-optimized .
+        # Start containers on EC2
+        ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
+          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
+          "cd ~/bella_v3 && docker compose -f docker-compose.cost-optimized.yml up -d --force-recreate"
 
-          # Stop existing containers
-          docker compose -f docker-compose.cost-optimized.yml down
+        # Wait for services to start
+        sleep 30
 
-          # Start new containers
-          docker compose -f docker-compose.cost-optimized.yml up -d --force-recreate
+        # Health check
+        ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
+          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
+          "curl -f http://localhost:8000/healthz"
 
-          # Wait for services to start
-          sleep 30
-
-          # Health check
-          curl -f http://localhost:8000/healthz || exit 1
-
-          echo "✅ Deployment completed successfully!"
-        EOF
+        echo "✅ Deployment completed successfully!"
 
     - name: Verify deployment
       run: |
