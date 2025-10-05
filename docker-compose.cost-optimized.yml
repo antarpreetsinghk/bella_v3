@@ -12,7 +12,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-      - ./.env:/app/.env
     depends_on:
       - redis
     restart: unless-stopped
