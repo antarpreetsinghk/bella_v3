@@ -9,13 +9,10 @@ services:
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./data/bella.db
       - REDIS_URL=redis://redis:6379/0
-      - APP_ENV=testing
-      - BELLA_API_KEY=33333333333333333333333333
-      - OPENAI_API_KEY=placeholder-openai-key
-      - TWILIO_ACCOUNT_SID=ACtest123
-      - TWILIO_AUTH_TOKEN=placeholder-twilio-token
-      - TWILIO_PHONE_NUMBER=+15559876543
-      - GOOGLE_CALENDAR_ENABLED=true
+      - AWS_DEFAULT_REGION=ca-central-1
+      - SECRETS_MANAGER_SECRET_ID=bella-env-82YlZa
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs

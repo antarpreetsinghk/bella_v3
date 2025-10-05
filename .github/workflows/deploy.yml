@@ -130,29 +130,30 @@ jobs:
         # Start containers on EC2
         ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
           -o ServerAliveInterval=60 -o ServerAliveCountMax=5 \
-          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
-          cd ~/bella_v3
+          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
+          "cd ~/bella_v3 && \
+           export AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}' && \
+           export AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}' && \
+           echo '🚀 Starting containers...' && \
+           docker compose -f docker-compose.cost-optimized.yml up -d --force-recreate && \
+           echo '⏳ Waiting for services to start...' && \
+           sleep 30"
 
-          echo "🚀 Starting containers..."
-          docker compose -f docker-compose.cost-optimized.yml up -d --force-recreate
-
-          echo "⏳ Waiting for services to start..."
-          sleep 30
-
-          echo "🩺 Running health check..."
-          for i in {1..12}; do
-            if curl -f http://localhost:8000/healthz; then
-              echo "✅ Health check passed"
-              exit 0
-            fi
-            echo "Attempt $i/12 failed, waiting 10s..."
-            sleep 10
-          done
-
-          echo "❌ Health check failed after 2 minutes"
-          docker compose -f docker-compose.cost-optimized.yml logs app --tail=20
-          exit 1
-        EOF
+        # Health check on EC2
+        ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
+          -o ServerAliveInterval=60 -o ServerAliveCountMax=5 \
+          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
+          "cd ~/bella_v3 && \
+           echo '🩺 Running health check...' && \
+           for i in {1..12}; do \
+             if curl -f http://localhost:8000/healthz; then \
+               echo '✅ Health check passed' && exit 0; \
+             fi; \
+             echo 'Attempt '\$i'/12 failed, waiting 10s...' && sleep 10; \
+           done && \
+           echo '❌ Health check failed after 2 minutes' && \
+           docker compose -f docker-compose.cost-optimized.yml logs app --tail=20 && \
+           exit 1"
 
         echo "✅ Deployment completed successfully!"
 

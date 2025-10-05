@@ -90,11 +90,13 @@ async def readyz(db: AsyncSession = Depends(get_session)):
     return {"db": "ok"}
 
 # -------- Global security gate (single place) --------
-BELLA_API_KEY = os.getenv("BELLA_API_KEY", "")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
-APP_ENV = os.getenv("APP_ENV", "production")
-PRODUCTION_BASE_URL = os.getenv("PRODUCTION_BASE_URL", "https://api.example.com")
+from app.utils.secrets import get_config_value
+
+BELLA_API_KEY = get_config_value("BELLA_API_KEY", "")
+TWILIO_AUTH_TOKEN = get_config_value("TWILIO_AUTH_TOKEN", "")
+TWILIO_ACCOUNT_SID = get_config_value("TWILIO_ACCOUNT_SID", "")
+APP_ENV = get_config_value("APP_ENV", "production")
+PRODUCTION_BASE_URL = get_config_value("PRODUCTION_BASE_URL", "https://api.example.com")
 TEST_MODE = APP_ENV.lower() in ("test", "testing", "development")
 
 # Public paths (do NOT require X-API-Key here)
