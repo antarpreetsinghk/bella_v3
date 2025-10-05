@@ -47,8 +47,11 @@ pgdata/
 *.sqlite3
 
 # ---- Env ----
-.env
-.env.*
+.env.local
+.env.test
+.env.development
+.env.staging
+!.env          # Keep main .env file for deployment
 !example.env   # keep example env files tracked if you create one
 
 # ---- Alembic ----
