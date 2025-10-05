@@ -40,9 +40,19 @@ jobs:
     - name: Run security checks
       run: |
         bandit -r app/ -f json -o bandit-report.json || true
-        safety check --json --output safety-report.json || true
+        safety check --json > safety-report.json || true
 
     - name: Run tests
+      env:
+        DATABASE_URL: "sqlite+aiosqlite:///./test.db"
+        POSTGRES_PASSWORD: "test_password"
+        BELLA_API_KEY: "test_key"
+        OPENAI_API_KEY: "test_key"
+        TWILIO_ACCOUNT_SID: "test_sid"
+        TWILIO_AUTH_TOKEN: "test_token"
+        TWILIO_PHONE_NUMBER: "+15551234567"
+        GOOGLE_CALENDAR_ENABLED: "false"
+        APP_ENV: "testing"
       run: |
         pytest tests/ -v --cov=app --cov-report=xml --cov-report=term
 
