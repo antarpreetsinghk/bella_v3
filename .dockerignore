@@ -73,3 +73,24 @@ real_*.py
 speech_*.py
 speech_*.html
 speech_*.jsonl
+
+# ---- GitHub and CI/CD files ----
+.github/
+*.md
+README*
+CHANGELOG*
+LICENSE*
+
+# ---- Deployment keys and configs ----
+*.pem
+*.key
+deploy*.sh
+*.yml.disabled
+
+# ---- Data and logs ----
+data/
+logs/
+*.tmp
+*.bak
+tmp/
+temp/

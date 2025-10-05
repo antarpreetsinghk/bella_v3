@@ -110,23 +110,54 @@ jobs:
         scp -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
           .env ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/bella_v3/.env
 
-        # Build Docker image on EC2
+        # Build Docker image on EC2 with timeout handling
         ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
-          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
-          "cd ~/bella_v3 && docker build -f Dockerfile.cost-optimized -t bella-v3:cost-optimized ."
+          -o ServerAliveInterval=60 -o ServerAliveCountMax=10 \
+          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
+          cd ~/bella_v3
+
+          # Clean up old images to save space and speed up build
+          docker system prune -f --volumes || true
+
+          # Build with progress output and no cache for faster, more reliable builds
+          echo "🔨 Building Docker image..."
+          timeout 600 docker build -f Dockerfile.cost-optimized \
+            --progress=plain \
+            --no-cache \
+            -t bella-v3:cost-optimized . || {
+            echo "❌ Docker build timed out or failed"
+            exit 1
+          }
+
+          echo "✅ Docker build completed successfully"
+        EOF
 
         # Start containers on EC2
         ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
-          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
-          "cd ~/bella_v3 && docker compose -f docker-compose.cost-optimized.yml up -d --force-recreate"
+          -o ServerAliveInterval=60 -o ServerAliveCountMax=5 \
+          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
+          cd ~/bella_v3
 
-        # Wait for services to start
-        sleep 30
+          echo "🚀 Starting containers..."
+          docker compose -f docker-compose.cost-optimized.yml up -d --force-recreate
 
-        # Health check
-        ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
-          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
-          "curl -f http://localhost:8000/healthz"
+          echo "⏳ Waiting for services to start..."
+          sleep 30
+
+          echo "🩺 Running health check..."
+          for i in {1..12}; do
+            if curl -f http://localhost:8000/healthz; then
+              echo "✅ Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i/12 failed, waiting 10s..."
+            sleep 10
+          done
+
+          echo "❌ Health check failed after 2 minutes"
+          docker compose -f docker-compose.cost-optimized.yml logs app --tail=20
+          exit 1
+        EOF
 
         echo "✅ Deployment completed successfully!"
 
