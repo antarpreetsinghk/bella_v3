@@ -1,0 +1,354 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [ main, production ]
+    types: [opened, synchronize, reopened]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install black isort flake8 mypy
+
+    - name: Code formatting (Black)
+      run: |
+        black --check --diff app/ tests/
+
+    - name: Import sorting (isort)
+      run: |
+        isort --check-only --diff app/ tests/
+
+    - name: Linting (flake8)
+      run: |
+        flake8 app/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+
+    - name: Type checking (mypy)
+      run: |
+        mypy app/ --ignore-missing-imports
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Security scan (Bandit)
+      run: |
+        bandit -r app/ -f json -o bandit-report.json || true
+        bandit -r app/ -f txt
+
+    - name: Dependency security check (Safety)
+      run: |
+        safety check --json --output safety-report.json || true
+        safety check
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  test-suite:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Set up test environment
+      run: |
+        cp .env .env.test
+        # Override for testing
+        echo "DATABASE_URL=sqlite+aiosqlite:///./test.db" >> .env.test
+        echo "REDIS_URL=redis://localhost:6379/1" >> .env.test
+        echo "APP_ENV=testing" >> .env.test
+
+    - name: Run database migrations
+      run: |
+        export $(cat .env.test | xargs)
+        alembic upgrade head
+
+    - name: Run tests
+      run: |
+        export $(cat .env.test | xargs)
+        pytest tests/ -v \
+          --cov=app \
+          --cov-report=xml \
+          --cov-report=term \
+          --cov-report=html \
+          --junitxml=test-results.xml
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          test-results.xml
+          coverage.xml
+          htmlcov/
+
+    - name: Comment test coverage
+      uses: py-cov-action/python-coverage-comment-action@v3
+      if: github.event_name == 'pull_request'
+      with:
+        GITHUB_TOKEN: ${{ github.token }}
+
+  docker-build-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build cost-optimized image
+      run: |
+        docker build -f Dockerfile.cost-optimized -t bella-v3:test .
+
+    - name: Test container startup
+      run: |
+        # Create test environment
+        echo "DATABASE_URL=sqlite+aiosqlite:///./test.db" > .env.test
+        echo "REDIS_URL=redis://redis:6379/0" >> .env.test
+        echo "APP_ENV=testing" >> .env.test
+
+        # Start Redis for testing
+        docker run -d --name test-redis -p 6379:6379 redis:7-alpine
+
+        # Test the application container
+        docker run --rm --name test-app \
+          --link test-redis:redis \
+          -v $(pwd)/.env.test:/app/.env \
+          -p 8000:8000 \
+          bella-v3:test &
+
+        # Wait for startup
+        sleep 30
+
+        # Test health endpoint
+        curl -f http://localhost:8000/healthz || exit 1
+
+        # Cleanup
+        docker stop test-redis test-app || true
+
+  configuration-validation:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Validate Docker Compose files
+      run: |
+        # Install docker-compose if not available
+        sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+
+        # Validate syntax
+        docker-compose -f docker-compose.cost-optimized.yml config
+
+    - name: Validate environment configuration
+      run: |
+        # Check required environment variables
+        REQUIRED_VARS="BELLA_API_KEY DATABASE_URL REDIS_URL OPENAI_API_KEY TWILIO_ACCOUNT_SID"
+
+        echo "Checking .env file structure..."
+        for var in $REQUIRED_VARS; do
+          if ! grep -q "^${var}=" .env; then
+            echo "❌ Missing required variable: $var"
+            exit 1
+          else
+            echo "✅ Found: $var"
+          fi
+        done
+
+    - name: Validate Nginx configuration
+      run: |
+        # Test nginx config syntax
+        docker run --rm -v $(pwd)/nginx.conf:/etc/nginx/nginx.conf nginx:alpine nginx -t
+
+  performance-baseline:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install locust
+
+    - name: Run performance baseline
+      run: |
+        # Set up test environment
+        export DATABASE_URL="sqlite+aiosqlite:///./test.db"
+        export REDIS_URL="redis://localhost:6379/1"
+        export APP_ENV="testing"
+
+        # Start Redis
+        docker run -d --name perf-redis -p 6379:6379 redis:7-alpine
+
+        # Run database migrations
+        alembic upgrade head
+
+        # Start application in background
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+        APP_PID=$!
+
+        # Wait for startup
+        sleep 10
+
+        # Run basic performance test
+        cat << EOF > locustfile.py
+        from locust import HttpUser, task, between
+
+        class BellaUser(HttpUser):
+            wait_time = between(1, 3)
+
+            @task(3)
+            def health_check(self):
+                self.client.get("/healthz")
+
+            @task(1)
+            def docs_page(self):
+                self.client.get("/docs")
+
+            @task(1)
+            def admin_dashboard(self):
+                self.client.get("/")
+        EOF
+
+        # Run performance test
+        locust -f locustfile.py --headless -u 10 -r 2 -t 60s --host http://localhost:8000
+
+        # Cleanup
+        kill $APP_PID
+        docker stop perf-redis
+
+  pr-summary:
+    needs: [code-quality, security-scan, test-suite, docker-build-test, configuration-validation]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: PR Summary Comment
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const results = {
+            'Code Quality': '${{ needs.code-quality.result }}',
+            'Security Scan': '${{ needs.security-scan.result }}',
+            'Test Suite': '${{ needs.test-suite.result }}',
+            'Docker Build': '${{ needs.docker-build-test.result }}',
+            'Configuration': '${{ needs.configuration-validation.result }}'
+          };
+
+          let summary = '## 🔍 PR Validation Summary\n\n';
+          let allPassed = true;
+
+          for (const [check, result] of Object.entries(results)) {
+            const icon = result === 'success' ? '✅' : result === 'failure' ? '❌' : '⚠️';
+            summary += `${icon} **${check}**: ${result}\n`;
+            if (result !== 'success') allPassed = false;
+          }
+
+          if (allPassed) {
+            summary += '\n🎉 **All checks passed!** This PR is ready for review.';
+          } else {
+            summary += '\n⚠️ **Some checks failed.** Please review the failed checks above.';
+          }
+
+          summary += '\n\n### Next Steps\n';
+          if (allPassed) {
+            summary += '- [ ] Code review by maintainers\n';
+            summary += '- [ ] Manual testing if needed\n';
+            summary += '- [ ] Merge when approved\n';
+          } else {
+            summary += '- [ ] Fix failing checks\n';
+            summary += '- [ ] Push fixes to trigger re-validation\n';
+          }
+
+          // Find existing comment and update or create new
+          const comments = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const existingComment = comments.data.find(
+            comment => comment.body.includes('PR Validation Summary')
+          );
+
+          if (existingComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existingComment.id,
+              body: summary
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            });
+          }
