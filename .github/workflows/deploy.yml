@@ -90,6 +90,11 @@ jobs:
 
     - name: Deploy to EC2
       run: |
+        # Stop containers first to release file locks
+        ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
+          ${{ env.EC2_USER }}@${{ env.EC2_HOST }} \
+          "cd ~/bella_v3 && docker compose -f docker-compose.cost-optimized.yml down || true"
+
         # Copy project files to EC2
         rsync -avz --delete \
           --exclude='.git/' \
@@ -97,6 +102,7 @@ jobs:
           --exclude='*.log' \
           --exclude='.env.local' \
           --exclude='.env' \
+          --exclude='data/' \
           -e "ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no" \
           ./ ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:~/bella_v3/
 
