@@ -569,6 +569,7 @@ async def voice_collect(
                 notes = speech if sess.data.get("notes") is None else sess.data.get("notes")
 
                 # Find or create user
+                logger.info("[voice] Looking up user with mobile=%s", _mask_phone(mobile))
                 try:
                     user = await get_user_by_mobile(db, mobile)
                     if not user:
@@ -590,6 +591,7 @@ async def voice_collect(
 </Response>""")
 
                 # Create appointment directly with our datetime object
+                logger.info("[voice] About to create appointment: user_id=%s starts_at=%s type=%s", user.id, starts_at_utc, type(starts_at_utc))
                 try:
                     appt = await create_appointment_unique(
                         db,
