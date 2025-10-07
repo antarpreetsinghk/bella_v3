@@ -569,7 +569,6 @@ async def voice_collect(
                 notes = speech if sess.data.get("notes") is None else sess.data.get("notes")
 
                 # Find or create user
-                logger.info("[voice] Looking up user with mobile=%s", _mask_phone(mobile))
                 try:
                     user = await get_user_by_mobile(db, mobile)
                     if not user:
@@ -591,7 +590,6 @@ async def voice_collect(
 </Response>""")
 
                 # Create appointment directly with our datetime object
-                logger.info("[voice] About to create appointment: user_id=%s starts_at=%s type=%s", user.id, starts_at_utc, type(starts_at_utc))
                 try:
                     appt = await create_appointment_unique(
                         db,
@@ -620,8 +618,9 @@ async def voice_collect(
                 except Exception as e:
                     # Database or other errors
                     logger.exception("[voice] Database error for call=%s: %s", CallSid, e)
-                    logger.error("[voice] Debug info - starts_at_utc type=%s value=%s", type(starts_at_utc), starts_at_utc)
-                    logger.error("[voice] Debug info - user_id=%s duration_min=%s notes=%s", user.id if 'user' in locals() else 'None', duration_min, notes)
+                    logger.error("[voice] Debug - starts_at_utc: type=%s value=%s", type(starts_at_utc), starts_at_utc)
+                    logger.error("[voice] Debug - user_id=%s duration_min=%s", user.id if 'user' in locals() else 'None', duration_min)
+                    logger.error("[voice] Debug - mobile=%s full_name=%s", _mask_phone(mobile) if 'mobile' in locals() else 'None', full_name if 'full_name' in locals() else 'None')
                     sess.data.pop("starts_at_utc", None)
                     sess.step = "ask_time"
                     save_session(sess)
