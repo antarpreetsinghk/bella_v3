@@ -44,7 +44,7 @@ jobs:
 
     - name: Run tests
       env:
-        DATABASE_URL: "sqlite+aiosqlite:///./test.db"
+        DATABASE_URL: "postgresql+asyncpg://bella_user:test_password@localhost:5432/bella_test_db"
         POSTGRES_PASSWORD: "test_password"
         BELLA_API_KEY: "test_key"
         OPENAI_API_KEY: "test_key"

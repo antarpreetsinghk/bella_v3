@@ -80,7 +80,7 @@ export BELLA_API_KEY="your-secure-api-key"
 export OPENAI_API_KEY="sk-your-openai-key"
 export TWILIO_ACCOUNT_SID="ACyour-account-sid"
 export TWILIO_AUTH_TOKEN="your-auth-token"
-export DATABASE_URL="sqlite+aiosqlite:///./bella.db"
+export DATABASE_URL="postgresql+asyncpg://bella_user:bella_secure_password_2024@localhost:5432/bella_db"
 
 # Initialize database
 python -c "from app.db.base import init_db; init_db()"
@@ -143,7 +143,7 @@ curl -X POST -H "X-API-Key: your-key" \
 # Core Application
 BELLA_API_KEY="your-secure-api-key"
 APP_ENV="production"  # or "development"
-DATABASE_URL="sqlite+aiosqlite:///./bella.db"
+DATABASE_URL="postgresql+asyncpg://bella_user:bella_secure_password_2024@localhost:5432/bella_db"
 
 # External Services
 OPENAI_API_KEY="sk-your-openai-key"

@@ -64,21 +64,19 @@ class Settings(BaseSettings):
     # (Optional app knobs you can use later)
     ALLOWED_CORS_ORIGINS: str = "*"  # comma-separated list, e.g. "http://localhost:3000,https://your.app"
 
-    # Sync URI (Alembic)
+    # Sync URI (Alembic) - PostgreSQL only
     @property
     def sync_db_uri(self) -> str:
         if self.DATABASE_URL:
-            # Convert async URL to sync URL if needed
-            if "sqlite+aiosqlite:" in self.DATABASE_URL:
-                return self.DATABASE_URL.replace("sqlite+aiosqlite:", "sqlite:")
-            elif "postgresql+asyncpg:" in self.DATABASE_URL:
+            # Convert async PostgreSQL URL to sync URL
+            if "postgresql+asyncpg:" in self.DATABASE_URL:
                 return self.DATABASE_URL.replace("postgresql+asyncpg:", "postgresql:")
             return self.DATABASE_URL
         # Fallback to postgres config
         pwd = urllib.parse.quote_plus(self.POSTGRES_PASSWORD)
         return f"postgresql://{self.POSTGRES_USER}:{pwd}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
-    # Async URI (SQLAlchemy engine)
+    # Async URI (SQLAlchemy engine) - PostgreSQL only
     @property
     def async_db_uri(self) -> str:
         if self.DATABASE_URL:

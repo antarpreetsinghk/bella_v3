@@ -21,7 +21,7 @@ async def create_appointment_unique(
     status: str = "booked",
     notes: Optional[str] = None,
 ) -> Appointment:
-    # Check if appointment already exists (works with both SQLite and PostgreSQL)
+    # Check if appointment already exists
     existing = await db.execute(
         sa.select(Appointment).where(
             Appointment.user_id == user_id,

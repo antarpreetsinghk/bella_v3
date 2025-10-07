@@ -8,6 +8,12 @@ __pycache__/
 .eggs/
 *.log
 
+# ---- SQLite databases (legacy - no longer used) ----
+*.db
+*.sqlite
+*.sqlite3
+data/
+
 # ---- Virtual envs ----
 venv/
 env/

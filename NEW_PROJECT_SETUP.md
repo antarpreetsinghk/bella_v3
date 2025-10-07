@@ -13,10 +13,7 @@ REQUEST_MAX_TOKENS=4000
 RESPONSE_MAX_TOKENS=512
 
 # === DATABASE ===
-# Option 1: SQLite (Local Development)
-DATABASE_URL=sqlite+aiosqlite:///./bella.db
-
-# Option 2: PostgreSQL (Production)
+# PostgreSQL (Required - SQLite no longer supported)
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DB=bella_db

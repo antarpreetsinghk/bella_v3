@@ -48,7 +48,7 @@ BELLA_API_KEY="your-64-character-secure-api-key"
 OPENAI_API_KEY="sk-your-openai-api-key"
 TWILIO_ACCOUNT_SID="ACyour-twilio-account-sid"
 TWILIO_AUTH_TOKEN="your-twilio-auth-token"
-DATABASE_URL="sqlite+aiosqlite:///./bella.db"
+DATABASE_URL="postgresql+asyncpg://bella_user:bella_secure_password_2024@localhost:5432/bella_db"
 APP_ENV="development"
 EOF
 

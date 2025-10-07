@@ -105,8 +105,8 @@ if __name__ == "__main__":
     print("🚀 Bella V3 Database Initialization")
     print("=" * 50)
 
-    # Set environment variable for SQLite
-    os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/bella.db")
+    # Set environment variable for PostgreSQL
+    os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://bella_user:bella_secure_password_2024@localhost:5432/bella_db")
 
     # Run initialization
     success = asyncio.run(init_database())
