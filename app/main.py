@@ -81,7 +81,8 @@ async def version():
 async def debug_db(db: AsyncSession = Depends(get_session)):
     """Debug database connectivity and timezone handling."""
     from datetime import datetime, timezone
-    from app.crud.user import create_user
+    from app.crud.user import create_user, get_user_by_mobile
+    from app.crud.appointment import create_appointment_unique
     from app.schemas.user import UserCreate
 
     try:
@@ -91,14 +92,35 @@ async def debug_db(db: AsyncSession = Depends(get_session)):
         # Test timezone-aware datetime
         test_time = datetime.now(timezone.utc)
 
-        # Test user creation (which was failing)
-        test_user_data = UserCreate(full_name="Test User", mobile="+15551234567")
+        # Test user creation and appointment booking
+        test_user_data = UserCreate(full_name="Debug Test User", mobile="+15559999999")
+
+        # Try to find or create user
+        user = await get_user_by_mobile(db, "+15559999999")
+        if not user:
+            user = await create_user(db, test_user_data)
+
+        # Test appointment creation
+        future_time = datetime.now(timezone.utc).replace(hour=15, minute=0, second=0, microsecond=0)
+        try:
+            appt = await create_appointment_unique(
+                db,
+                user_id=user.id,
+                starts_at_utc=future_time,
+                duration_min=30,
+                notes="Debug test appointment"
+            )
+            appointment_test = {"status": "success", "appointment_id": appt.id}
+        except Exception as appt_e:
+            appointment_test = {"status": "error", "error": str(appt_e), "error_type": type(appt_e).__name__}
 
         return {
             "db_connection": "ok",
             "current_time_utc": test_time.isoformat(),
             "timezone_aware": test_time.tzinfo is not None,
-            "test_user_ready": True
+            "test_user_ready": True,
+            "user_test": {"id": user.id, "name": user.full_name},
+            "appointment_test": appointment_test
         }
     except Exception as e:
         return {
