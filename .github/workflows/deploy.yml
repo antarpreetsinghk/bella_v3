@@ -92,6 +92,7 @@ jobs:
       run: |
         echo "🔨 Building Docker image..."
         docker build -f Dockerfile.cost-optimized \
+          --platform linux/amd64 \
           -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
           -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
 

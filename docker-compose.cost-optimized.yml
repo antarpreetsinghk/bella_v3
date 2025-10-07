@@ -20,7 +20,7 @@ services:
       - bella-network
 
   app:
-    image: 291878986264.dkr.ecr.ca-central-1.amazonaws.com/bella-v3:latest
+    image: bella-v3:latest
     container_name: bella-app
     ports:
       - "8000:8000"
