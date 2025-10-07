@@ -21,11 +21,16 @@ async def create_appointment_unique(
     status: str = "booked",
     notes: Optional[str] = None,
 ) -> Appointment:
-    # Check if appointment already exists
+    # Check if appointment already exists (within 1-minute window to handle datetime precision)
+    from datetime import timedelta
+    time_window_start = starts_at_utc - timedelta(minutes=1)
+    time_window_end = starts_at_utc + timedelta(minutes=1)
+
     existing = await db.execute(
         sa.select(Appointment).where(
             Appointment.user_id == user_id,
-            Appointment.starts_at == starts_at_utc
+            Appointment.starts_at >= time_window_start,
+            Appointment.starts_at <= time_window_end
         )
     )
     if existing.scalar_one_or_none():
