@@ -51,13 +51,14 @@ class CallSession:
             for key, value in data["data"].items():
                 if isinstance(value, str) and "T" in value:
                     try:
-                        # Handle both timezone-aware and naive datetime strings
-                        if "Z" in value.upper():
-                            data["data"][key] = datetime.fromisoformat(value.replace("Z", "+00:00"))
-                        elif "+" in value or value.count(":") >= 2:
-                            data["data"][key] = datetime.fromisoformat(value)
+                        # Try to parse any ISO datetime string (handles both +/- timezone offsets)
+                        data["data"][key] = datetime.fromisoformat(value.replace("Z", "+00:00"))
                     except ValueError:
-                        pass  # Keep as string if not a valid datetime
+                        try:
+                            # Fallback for other datetime formats
+                            data["data"][key] = datetime.fromisoformat(value)
+                        except ValueError:
+                            pass  # Keep as string if not a valid datetime
 
         return cls(**data)
 
