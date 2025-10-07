@@ -36,6 +36,11 @@ async def create_appointment_unique(
     if existing.scalar_one_or_none():
         raise ValueError("Appointment already exists for this user at that time.")
 
+    # Ensure timezone-aware datetime for database compatibility
+    if starts_at_utc.tzinfo is None:
+        # If timezone-naive, assume UTC and make it timezone-aware
+        starts_at_utc = starts_at_utc.replace(tzinfo=timezone.utc)
+
     # Create new appointment with explicit timestamp
     appt = Appointment(
         user_id=user_id,
