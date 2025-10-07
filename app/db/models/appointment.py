@@ -25,8 +25,8 @@ class Appointment(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
-        server_default=sa.text("timezone('utc', now())"),
         nullable=False,
+        default=lambda: datetime.utcnow()  # Python-side default for cross-database compatibility
     )
 
     # Relations

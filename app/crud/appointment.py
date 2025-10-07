@@ -31,13 +31,14 @@ async def create_appointment_unique(
     if existing.scalar_one_or_none():
         raise ValueError("Appointment already exists for this user at that time.")
 
-    # Create new appointment
+    # Create new appointment with explicit timestamp
     appt = Appointment(
         user_id=user_id,
         starts_at=starts_at_utc,
         duration_min=duration_min,
         status=status,
         notes=notes,
+        created_at=datetime.utcnow()  # Explicit timestamp for reliability
     )
     db.add(appt)
 

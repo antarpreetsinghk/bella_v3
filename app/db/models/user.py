@@ -17,11 +17,11 @@ class User(Base):
     # Required fields
     full_name: Mapped[str] = mapped_column(sa.String(120), nullable=False)
     mobile: Mapped[str] = mapped_column(sa.String(20), nullable=False, unique=True)
-    # Server-side timestamp (tz-aware). Postgres will fill this on insert.
+    # Cross-database compatible timestamp
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
-        server_default=sa.text("now()"),
         nullable=False,
+        default=lambda: datetime.utcnow()  # Python-side default for cross-database compatibility
     )
 
     appointments: Mapped[list["Appointment"]] = relationship(

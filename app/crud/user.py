@@ -23,7 +23,12 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
     Insert a new user. If a concurrent request already created the same mobile,
     return the existing user instead of raising on UNIQUE constraint.
     """
-    obj = User(full_name=data.full_name, mobile=data.mobile)
+    from datetime import datetime
+    obj = User(
+        full_name=data.full_name,
+        mobile=data.mobile,
+        created_at=datetime.utcnow()  # Explicit timestamp for reliability
+    )
     db.add(obj)
     try:
         await db.commit()
