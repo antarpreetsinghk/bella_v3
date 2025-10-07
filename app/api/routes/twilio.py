@@ -72,12 +72,33 @@ def _gather_block(prompt: str, timeout: int = 10) -> str:
           method="POST"
           action="/twilio/voice/collect"
           actionOnEmptyResult="true"
-          speechTimeout="5"
+          speechTimeout="auto"
           timeout="{timeout}"
           enhanced="true">
     <Say voice="alice" language="en-CA">{prompt}</Say>
   </Gather>
   <Say voice="alice" language="en-CA">Sorry, I didn't catch that.</Say>
+  <Redirect method="POST">/twilio/voice</Redirect>
+"""
+
+
+def _gather_block_confirmation(prompt: str, timeout: int = 15) -> str:
+    """
+    Specialized gather block for confirmation prompts to prevent speech interruption.
+    Uses actionOnEmptyResult=false and longer timeout to avoid cutting off speech.
+    """
+    return f"""
+  <Gather input="speech"
+          language="en-CA"
+          method="POST"
+          action="/twilio/voice/collect"
+          actionOnEmptyResult="false"
+          speechTimeout="auto"
+          timeout="{timeout}"
+          enhanced="true">
+    <Say voice="alice" language="en-CA">{prompt}</Say>
+  </Gather>
+  <Say voice="alice" language="en-CA">I'm sorry, I didn't hear a clear yes or no. Let me ask again.</Say>
   <Redirect method="POST">/twilio/voice</Redirect>
 """
 
@@ -372,7 +393,7 @@ async def voice_collect(
             logger.info("[session_debug] after ask_name step=%s data=%s", sess.step, sess.data)
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(f"I heard '{sess.data['full_name']}'. Is that correct? Please say Yes or No.")}
+{_gather_block_confirmation(f"I heard '{sess.data['full_name']}'. Is that correct? Please say Yes or No.")}
 </Response>""")
         else:
             # No valid name extracted, ask again
@@ -424,7 +445,7 @@ async def voice_collect(
             # Unclear response, ask for clarification
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(f"I heard '{sess.data['full_name']}'. Please say Yes if that's correct, or No if it's wrong.")}
+{_gather_block_confirmation(f"I heard '{sess.data['full_name']}'. Please say Yes if that's correct, or No if it's wrong.")}
 </Response>""")
 
     if sess.step == "ask_mobile":
@@ -507,7 +528,7 @@ async def voice_collect(
 
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(f"Ready to book for {name} on {when_local}? Say Yes or No.", timeout=20)}
+{_gather_block_confirmation(f"Ready to book for {name} on {when_local}? Say Yes or No.")}
 </Response>""")
 
     if sess.step == "confirm":
@@ -655,7 +676,7 @@ async def voice_collect(
         summary = _summary(sess.data)
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(f"I heard: {cleaned_speech}. Should I book {summary}? Please say Yes or No.")}
+{_gather_block_confirmation(f"I heard: {cleaned_speech}. Should I book {summary}? Please say Yes or No.")}
 </Response>""")
 
     # Fallback: reset to first step
