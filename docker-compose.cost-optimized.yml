@@ -1,13 +1,36 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: bella-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bella_db
+      POSTGRES_USER: bella_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bella_secure_password_2024}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bella_user -d bella_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bella-network
+
   app:
     build: .
     container_name: bella-app
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./data/bella.db
+      - DATABASE_URL=postgresql+asyncpg://bella_user:${POSTGRES_PASSWORD:-bella_secure_password_2024}@db:5432/bella_db
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=bella_db
+      - POSTGRES_USER=bella_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-bella_secure_password_2024}
       - REDIS_URL=redis://redis:6379/0
       - AWS_DEFAULT_REGION=ca-central-1
       - SECRETS_MANAGER_SECRET_ID=bella-env-82YlZa
@@ -15,10 +38,12 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - APP_ENV=testing
     volumes:
-      - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
@@ -63,6 +88,8 @@ services:
       - bella-network
 
 volumes:
+  postgres_data:
+    driver: local
   redis_data:
     driver: local
 
