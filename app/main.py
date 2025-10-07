@@ -67,6 +67,16 @@ except Exception as e:
 async def healthz():
     return {"ok": True}
 
+@app.get("/version", include_in_schema=False)
+async def version():
+    import subprocess
+    try:
+        # Get current git commit hash
+        commit = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd='/app').decode().strip()
+        return {"commit": commit, "version": "latest", "timezone_fix": True, "speech_fix": True}
+    except:
+        return {"commit": "unknown", "version": "deployed", "timezone_fix": True, "speech_fix": True}
+
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
     """Internal metrics endpoint for monitoring."""
