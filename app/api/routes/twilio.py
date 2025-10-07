@@ -85,7 +85,7 @@ def _gather_block(prompt: str, timeout: int = 10) -> str:
 def _gather_block_confirmation(prompt: str, timeout: int = 15) -> str:
     """
     Specialized gather block for confirmation prompts to prevent speech interruption.
-    Uses actionOnEmptyResult=false and longer timeout to avoid cutting off speech.
+    Uses bargeIn=false to let the full prompt play before accepting input.
     """
     return f"""
   <Gather input="speech"
@@ -95,8 +95,10 @@ def _gather_block_confirmation(prompt: str, timeout: int = 15) -> str:
           actionOnEmptyResult="false"
           speechTimeout="auto"
           timeout="{timeout}"
-          enhanced="true">
-    <Say voice="alice" language="en-CA">{prompt}</Say>
+          enhanced="true"
+          hints="yes,no,yeah,yep,nope">
+    <Say voice="alice" language="en-CA" bargeIn="false">{prompt}</Say>
+    <Pause length="1"/>
   </Gather>
   <Say voice="alice" language="en-CA">I'm sorry, I didn't hear a clear yes or no. Let me ask again.</Say>
   <Redirect method="POST">/twilio/voice</Redirect>
@@ -672,11 +674,20 @@ async def voice_collect(
 {_gather_block("Okay—no problem. What date and time would you like instead?")}
 </Response>""")
 
-        # unclear → re-confirm
+        # unclear → re-confirm without showing garbled speech
         summary = _summary(sess.data)
+        # Only show speech if it's meaningful (more than 2 chars and contains actual words)
+        speech_to_show = ""
+        if cleaned_speech and len(cleaned_speech.strip()) > 2 and any(c.isalpha() for c in cleaned_speech):
+            # Clean up the speech for display - remove very short words that might be noise
+            words = cleaned_speech.split()
+            meaningful_words = [w for w in words if len(w) > 1 or w.lower() in ['i', 'a']]
+            if meaningful_words:
+                speech_to_show = f"I heard: {' '.join(meaningful_words)}. "
+
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block_confirmation(f"I heard: {cleaned_speech}. Should I book {summary}? Please say Yes or No.")}
+{_gather_block_confirmation(f"{speech_to_show}Should I book {summary}? Please say Yes or No.")}
 </Response>""")
 
     # Fallback: reset to first step
