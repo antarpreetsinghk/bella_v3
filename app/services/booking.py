@@ -184,7 +184,7 @@ async def book_from_transcript(
         local = (starts_at_utc or datetime.now(tz=UTC)).astimezone(LOCAL_TZ)
         when = local.strftime("%A, %B %d at %I:%M %p")
         msg = (
-            f"It looks like there’s already an appointment for that time ({when}). "
+            f"It looks like there's already an appointment for that time ({when}). "
             f"Would you like a different time on the same day or another day?"
         )
         # IMPORTANT: use cached strings (no ORM attribute access here)
@@ -192,7 +192,30 @@ async def book_from_transcript(
             created=False,
             message_for_caller=msg,
             echo=_jsonify({
-                "error": str(e),
+                "error": "time_conflict",
+                "error_details": str(e),
+                "requested_time": when,
+                "extracted": ex,
+                "normalized": {
+                    "full_name": user_name,
+                    "mobile": user_mobile,
+                    "starts_at_utc": starts_at_utc,
+                },
+            }),
+        )
+    except Exception as e:
+        # Database or other unexpected errors
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.exception("Unexpected error during appointment creation: %s", e)
+
+        msg = "I'm having trouble saving your appointment right now. Please try again in a moment."
+        return BookResult(
+            created=False,
+            message_for_caller=msg,
+            echo=_jsonify({
+                "error": "database_error",
+                "error_details": str(e),
                 "extracted": ex,
                 "normalized": {
                     "full_name": user_name,

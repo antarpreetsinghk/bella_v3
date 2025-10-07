@@ -512,15 +512,30 @@ async def voice_collect(
                 full_name = sess.data.get("full_name")
                 mobile = sess.data.get("mobile")
                 starts_at_utc = sess.data.get("starts_at_utc")
+
+                # Validate all required data is present and valid
                 if not (full_name and mobile and starts_at_utc):
                     missing = []
                     if not full_name: missing.append("full name")
                     if not mobile: missing.append("phone number")
                     if not starts_at_utc: missing.append("date and time")
                     sess.step = "ask_name" if not full_name else ("ask_mobile" if not mobile else "ask_time")
+                    save_session(sess)
+                    logger.warning("[confirm] missing data for call=%s: %s", CallSid, missing)
                     return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("I’m missing " + ", ".join(missing) + ". Let’s try again.")}
+{_gather_block("I'm missing " + ", ".join(missing) + ". Let's try again.")}
+</Response>""")
+
+                # Additional validation: ensure datetime object is valid
+                if not isinstance(starts_at_utc, datetime):
+                    logger.warning("[confirm] invalid datetime object for call=%s: %s", CallSid, type(starts_at_utc))
+                    sess.data.pop("starts_at_utc", None)
+                    sess.step = "ask_time"
+                    save_session(sess)
+                    return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+{_gather_block("I had trouble with that time. Could you please tell me the date and time again?")}
 </Response>""")
 
                 # Use booking service with Google Calendar integration
@@ -565,7 +580,11 @@ async def voice_collect(
                 # conflict or unique constraint → suggest another time
                 local = (sess.data.get("starts_at_utc") or datetime.now(tz=ZoneInfo("UTC"))).astimezone(LOCAL_TZ)
                 suggestion = local if not HAVE_BH else (next_opening(local) or local)
+                # Clear the conflicting time data so user can provide new time
+                sess.data.pop("starts_at_utc", None)
                 sess.step = "ask_time"
+                save_session(sess)
+                logger.warning("[confirm] time conflict for call=%s, clearing time data", CallSid)
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>That time is not available.</Say>
@@ -573,8 +592,11 @@ async def voice_collect(
 </Response>""")
             except Exception as e:
                 logger.exception("[confirm] call=%s booking error: %r", CallSid, e)
-                # Don't reset session - go back to ask_time instead of hanging up
+                # Clear the problematic time data to allow fresh input
+                sess.data.pop("starts_at_utc", None)
                 sess.step = "ask_time"
+                save_session(sess)
+                logger.warning("[confirm] booking failed for call=%s, clearing time data for retry", CallSid)
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>I'm sorry, there was an issue with that booking. Let's try a different time.</Say>
