@@ -9,7 +9,6 @@ from app.db.session import Base
 class Appointment(Base):
     __tablename__ = "appointments"
     __table_args__ = (
-        sa.UniqueConstraint("user_id", "starts_at", name="uq_appointments_user_id_starts_at"),
         sa.Index("ix_appointments_user_id", "user_id"),
         sa.Index("ix_appointments_starts_at", "starts_at"),
     )
