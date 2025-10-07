@@ -84,8 +84,7 @@ def _gather_block(prompt: str, timeout: int = 10) -> str:
 
 def _gather_block_confirmation(prompt: str, timeout: int = 15) -> str:
     """
-    Specialized gather block for confirmation prompts to prevent speech interruption.
-    Uses bargeIn=false to let the full prompt play before accepting input.
+    Specialized gather block for confirmation prompts with optimized speech recognition.
     """
     return f"""
   <Gather input="speech"
@@ -97,8 +96,7 @@ def _gather_block_confirmation(prompt: str, timeout: int = 15) -> str:
           timeout="{timeout}"
           enhanced="true"
           hints="yes,no,yeah,yep,nope">
-    <Say voice="alice" language="en-CA" bargeIn="false">{prompt}</Say>
-    <Pause length="1"/>
+    <Say voice="alice" language="en-CA">{prompt}</Say>
   </Gather>
   <Say voice="alice" language="en-CA">I'm sorry, I didn't hear a clear yes or no. Let me ask again.</Say>
   <Redirect method="POST">/twilio/voice</Redirect>
@@ -530,7 +528,7 @@ async def voice_collect(
 
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block_confirmation(f"Ready to book for {name} on {when_local}? Say Yes or No.")}
+{_gather_block_confirmation(f"I'll book an appointment for {name} on {when_local}. Should I confirm this booking? Please say Yes or No.")}
 </Response>""")
 
     if sess.step == "confirm":
@@ -657,13 +655,16 @@ async def voice_collect(
 
             except Exception as e:
                 # Any other unexpected error during booking
-                logger.exception("[confirm] Unexpected error for call=%s: %s", CallSid, e)
+                error_type = type(e).__name__
+                error_msg = str(e)
+                logger.exception("[confirm] Booking failed for call=%s, error_type=%s, error=%s, user_id=%s, starts_at=%s",
+                               CallSid, error_type, error_msg, user.id if 'user' in locals() else None, starts_at_utc)
                 sess.data.pop("starts_at_utc", None)
                 sess.step = "ask_time"
                 save_session(sess)
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>I'm sorry, something went wrong. Let's try booking again.</Say>
+  <Say>I'm sorry, I'm having trouble saving your appointment. Let's try a different time.</Say>
 {_gather_block("What date and time would you like for your appointment?")}
 </Response>""")
 
