@@ -6,7 +6,7 @@ from typing import Optional, Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models.appointment import Appointment
 
@@ -21,26 +21,33 @@ async def create_appointment_unique(
     status: str = "booked",
     notes: Optional[str] = None,
 ) -> Appointment:
-    stmt = (
-        insert(Appointment)
-        .values(
-            user_id=user_id,
-            starts_at=starts_at_utc,
-            duration_min=duration_min,
-            status=status,
-            notes=notes,
+    # Check if appointment already exists (works with both SQLite and PostgreSQL)
+    existing = await db.execute(
+        sa.select(Appointment).where(
+            Appointment.user_id == user_id,
+            Appointment.starts_at == starts_at_utc
         )
-        .returning(Appointment)              # ORM row back
-        .on_conflict_do_nothing(index_elements=UNIQUE_COLS)
     )
-    res = await db.execute(stmt)
-    row = res.fetchone()
-    if row is None:
-        # conflict occurred
+    if existing.scalar_one_or_none():
+        raise ValueError("Appointment already exists for this user at that time.")
+
+    # Create new appointment
+    appt = Appointment(
+        user_id=user_id,
+        starts_at=starts_at_utc,
+        duration_min=duration_min,
+        status=status,
+        notes=notes,
+    )
+    db.add(appt)
+
+    try:
+        await db.commit()
+        await db.refresh(appt)
+        return appt
+    except IntegrityError:
         await db.rollback()
         raise ValueError("Appointment already exists for this user at that time.")
-    await db.commit()
-    return row[0]
 
 async def list_appointments(
     db: AsyncSession,

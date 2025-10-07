@@ -61,7 +61,7 @@ def _mask_phone(s: str | None) -> str:
     return s
 
 
-def _gather_block(prompt: str) -> str:
+def _gather_block(prompt: str, timeout: int = 10) -> str:
     """
     Canadian-optimized speech gathering with enhanced Twilio settings.
     Enhanced=true improves accuracy for Canadian English accents.
@@ -73,7 +73,7 @@ def _gather_block(prompt: str) -> str:
           action="/twilio/voice/collect"
           actionOnEmptyResult="true"
           speechTimeout="5"
-          timeout="10"
+          timeout="{timeout}"
           enhanced="true">
     <Say voice="alice" language="en-CA">{prompt}</Say>
   </Gather>
@@ -499,10 +499,15 @@ async def voice_collect(
         logger.info("[ask_time] time accepted, moving to confirm")
         logger.info("[session_debug] after ask_time step=%s data=%s", sess.step, sess.data)
 
-        summary = _summary(sess.data)
+        # Simplify confirmation prompt and use longer timeout
+        name = sess.data.get("full_name") or "Unknown"
+        when_local = "Unknown"
+        if sess.data.get("starts_at_utc"):
+            when_local = sess.data["starts_at_utc"].astimezone(LOCAL_TZ).strftime("%A, %B %d at %I:%M %p")
+
         return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(f"I have {summary}. Should I book it? Please say Yes or No.")}
+{_gather_block(f"Ready to book for {name} on {when_local}? Say Yes or No.", timeout=20)}
 </Response>""")
 
     if sess.step == "confirm":
@@ -543,9 +548,25 @@ async def voice_collect(
                 notes = speech if sess.data.get("notes") is None else sess.data.get("notes")
 
                 # Find or create user
-                user = await get_user_by_mobile(db, mobile)
-                if not user:
-                    user = await create_user(db, UserCreate(full_name=full_name, mobile=mobile))
+                try:
+                    user = await get_user_by_mobile(db, mobile)
+                    if not user:
+                        user = await create_user(db, UserCreate(full_name=full_name, mobile=mobile))
+                        logger.info("[voice] User created: id=%s name=%s mobile=%s",
+                                   user.id, user.full_name, _mask_phone(user.mobile))
+                    else:
+                        logger.info("[voice] User found: id=%s name=%s mobile=%s",
+                                   user.id, user.full_name, _mask_phone(user.mobile))
+                except Exception as e:
+                    logger.exception("[voice] User creation/lookup failed for call=%s: %s", CallSid, e)
+                    sess.data.pop("starts_at_utc", None)
+                    sess.step = "ask_time"
+                    save_session(sess)
+                    return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>I'm having trouble with your contact information. Let's try again.</Say>
+{_gather_block("What date and time would you like for your appointment?")}
+</Response>""")
 
                 # Create appointment directly with our datetime object
                 try:
@@ -556,8 +577,8 @@ async def voice_collect(
                         duration_min=duration_min,
                         notes=notes,
                     )
-                    logger.info("[voice] Appointment created: id=%s user=%s time=%s",
-                               appt.id, user.id, starts_at_utc)
+                    logger.info("[voice] Appointment created successfully: id=%s user=%s time=%s duration=%s",
+                               appt.id, user.id, starts_at_utc, duration_min)
 
                 except ValueError as e:
                     # Time conflict - appointment already exists
