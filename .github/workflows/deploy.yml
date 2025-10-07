@@ -113,6 +113,11 @@ jobs:
 
           # Clean up old images to save space and speed up build
           docker system prune -f --volumes || true
+          docker builder prune -af || true
+
+          # Remove any existing bella-v3 images to force complete rebuild
+          docker rmi bella-v3:cost-optimized || true
+          docker rmi $(docker images -q bella-v3) || true
 
           # Build with progress output and no cache for faster, more reliable builds
           echo "🔨 Building Docker image..."
