@@ -157,7 +157,9 @@ jobs:
            echo '🚀 Starting containers...' && \
            docker compose -f docker-compose.cost-optimized.yml up -d --force-recreate && \
            echo '⏳ Waiting for services to start...' && \
-           sleep 30"
+           sleep 30 && \
+           echo '🗄️ Running database migrations...' && \
+           docker compose -f docker-compose.cost-optimized.yml exec -T app alembic upgrade head"
 
         # Health check on EC2
         ssh -i ~/.ssh/bella-key.pem -o StrictHostKeyChecking=no \
