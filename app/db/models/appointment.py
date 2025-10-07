@@ -1,7 +1,7 @@
 # app/db/models/appointments.py
 
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
@@ -26,7 +26,7 @@ class Appointment(Base):
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.utcnow()  # Python-side default for cross-database compatibility
+        default=lambda: datetime.now(timezone.utc)  # Python-side timezone-aware default
     )
 
     # Relations

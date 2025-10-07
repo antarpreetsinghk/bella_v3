@@ -1,7 +1,7 @@
 # app/crud/appointment.py
 
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Sequence
 
 import sqlalchemy as sa
@@ -38,7 +38,7 @@ async def create_appointment_unique(
         duration_min=duration_min,
         status=status,
         notes=notes,
-        created_at=datetime.utcnow()  # Explicit timestamp for reliability
+        created_at=datetime.now(timezone.utc)  # Explicit timezone-aware timestamp
     )
     db.add(appt)
 

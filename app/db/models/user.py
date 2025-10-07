@@ -1,6 +1,6 @@
 # app/db/models/user.py
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from sqlalchemy.orm import Mapped, mapped_column
 import sqlalchemy as sa
 
@@ -21,7 +21,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.utcnow()  # Python-side default for cross-database compatibility
+        default=lambda: datetime.now(timezone.utc)  # Python-side timezone-aware default
     )
 
     appointments: Mapped[list["Appointment"]] = relationship(

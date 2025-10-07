@@ -23,11 +23,11 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
     Insert a new user. If a concurrent request already created the same mobile,
     return the existing user instead of raising on UNIQUE constraint.
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
     obj = User(
         full_name=data.full_name,
         mobile=data.mobile,
-        created_at=datetime.utcnow()  # Explicit timestamp for reliability
+        created_at=datetime.now(timezone.utc)  # Explicit timezone-aware timestamp
     )
     db.add(obj)
     try:
