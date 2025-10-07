@@ -538,69 +538,89 @@ async def voice_collect(
 {_gather_block("I had trouble with that time. Could you please tell me the date and time again?")}
 </Response>""")
 
-                # Use booking service with Google Calendar integration
+                # Direct database booking (no LLM extraction needed)
                 duration_min = int(sess.data.get("duration_min") or 30)
                 notes = speech if sess.data.get("notes") is None else sess.data.get("notes")
 
-                # Create a transcript-like summary for the booking service
-                booking_transcript = f"Name: {full_name}, Phone: {mobile}, Time: {starts_at_utc.astimezone(LOCAL_TZ).strftime('%A, %B %d at %I:%M %p')}, Duration: {duration_min} minutes"
-                if notes:
-                    booking_transcript += f", Notes: {notes}"
+                # Find or create user
+                user = await get_user_by_mobile(db, mobile)
+                if not user:
+                    user = await create_user(db, UserCreate(full_name=full_name, mobile=mobile))
 
-                # Use the booking service that includes calendar integration
-                booking_result = await book_from_transcript(
-                    db,
-                    transcript=booking_transcript,
-                    from_number=mobile,
-                    locale="en-CA"
-                )
+                # Create appointment directly with our datetime object
+                try:
+                    appt = await create_appointment_unique(
+                        db,
+                        user_id=user.id,
+                        starts_at_utc=starts_at_utc,
+                        duration_min=duration_min,
+                        notes=notes,
+                    )
+                    logger.info("[voice] Appointment created: id=%s user=%s time=%s",
+                               appt.id, user.id, starts_at_utc)
 
-                if not booking_result.created:
-                    # Booking failed, handle error
-                    reset_session(CallSid)
+                except ValueError as e:
+                    # Time conflict - appointment already exists
+                    logger.warning("[voice] Time conflict for call=%s: %s", CallSid, e)
+                    sess.data.pop("starts_at_utc", None)
+                    sess.step = "ask_time"
+                    save_session(sess)
+                    local = starts_at_utc.astimezone(LOCAL_TZ)
+                    suggestion = local if not HAVE_BH else (next_opening(local) or local)
                     return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>I'm sorry, there was an issue booking your appointment. {booking_result.message_for_caller}</Say>
-  <Hangup/>
+  <Say>That time is not available.</Say>
+{_gather_block(f"How about {suggestion.strftime('%A, %B %d at %I:%M %p')}? Or please say another time.")}
 </Response>""")
 
-                # Success - extract appointment time for confirmation
+                except Exception as e:
+                    # Database or other errors
+                    logger.exception("[voice] Database error for call=%s: %s", CallSid, e)
+                    sess.data.pop("starts_at_utc", None)
+                    sess.step = "ask_time"
+                    save_session(sess)
+                    return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>I'm having trouble saving your appointment. Let's try a different time.</Say>
+{_gather_block("What date and time would you like instead?")}
+</Response>""")
+
+                # Create Google Calendar event (non-blocking)
+                calendar_event = None
+                try:
+                    from app.services.google_calendar import create_calendar_event
+                    calendar_event = await create_calendar_event(
+                        user_name=user.full_name,
+                        user_mobile=user.mobile,
+                        starts_at_utc=appt.starts_at,
+                        duration_min=appt.duration_min,
+                        notes=appt.notes
+                    )
+                    if calendar_event:
+                        logger.info("[voice] Calendar event created: %s", calendar_event.get("event_id"))
+                except Exception as e:
+                    # Don't fail booking if calendar fails
+                    logger.warning("[voice] Calendar integration failed: %s", e)
+
+                # Success - appointment saved
                 when = starts_at_utc.astimezone(LOCAL_TZ).strftime("%A, %B %d at %I:%M %p")
                 reset_session(CallSid)
-
-                # Log successful calendar integration
-                if "calendar_event" in booking_result.echo:
-                    logger.info("[voice] Calendar event created for voice booking: %s", booking_result.echo["calendar_event"].get("event_id"))
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Thank you. Your appointment is booked for {when}. We look forward to seeing you.</Say>
   <Hangup/>
 </Response>""")
-            except ValueError:
-                # conflict or unique constraint → suggest another time
-                local = (sess.data.get("starts_at_utc") or datetime.now(tz=ZoneInfo("UTC"))).astimezone(LOCAL_TZ)
-                suggestion = local if not HAVE_BH else (next_opening(local) or local)
-                # Clear the conflicting time data so user can provide new time
-                sess.data.pop("starts_at_utc", None)
-                sess.step = "ask_time"
-                save_session(sess)
-                logger.warning("[confirm] time conflict for call=%s, clearing time data", CallSid)
-                return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>That time is not available.</Say>
-{_gather_block(f"How about {suggestion.strftime('%A, %B %d at %I:%M %p')}? Or please say another time.")}
-</Response>""")
+
             except Exception as e:
-                logger.exception("[confirm] call=%s booking error: %r", CallSid, e)
-                # Clear the problematic time data to allow fresh input
+                # Any other unexpected error during booking
+                logger.exception("[confirm] Unexpected error for call=%s: %s", CallSid, e)
                 sess.data.pop("starts_at_utc", None)
                 sess.step = "ask_time"
                 save_session(sess)
-                logger.warning("[confirm] booking failed for call=%s, clearing time data for retry", CallSid)
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>I'm sorry, there was an issue with that booking. Let's try a different time.</Say>
-{_gather_block("What date and time would you like instead?")}
+  <Say>I'm sorry, something went wrong. Let's try booking again.</Say>
+{_gather_block("What date and time would you like for your appointment?")}
 </Response>""")
 
         if any(k in ans for k in ["no", "nope", "cancel", "change"]):
