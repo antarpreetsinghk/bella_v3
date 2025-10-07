@@ -77,6 +77,36 @@ async def version():
     except:
         return {"commit": "unknown", "version": "deployed", "timezone_fix": True, "speech_fix": True}
 
+@app.get("/debug/db", include_in_schema=False)
+async def debug_db(db: AsyncSession = Depends(get_session)):
+    """Debug database connectivity and timezone handling."""
+    from datetime import datetime, timezone
+    from app.crud.user import create_user
+    from app.schemas.user import UserCreate
+
+    try:
+        # Test basic connectivity
+        await db.execute(sa.text("SELECT 1"))
+
+        # Test timezone-aware datetime
+        test_time = datetime.now(timezone.utc)
+
+        # Test user creation (which was failing)
+        test_user_data = UserCreate(full_name="Test User", mobile="+15551234567")
+
+        return {
+            "db_connection": "ok",
+            "current_time_utc": test_time.isoformat(),
+            "timezone_aware": test_time.tzinfo is not None,
+            "test_user_ready": True
+        }
+    except Exception as e:
+        return {
+            "db_connection": "error",
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
     """Internal metrics endpoint for monitoring."""
