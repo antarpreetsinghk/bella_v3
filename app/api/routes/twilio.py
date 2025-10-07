@@ -618,6 +618,8 @@ async def voice_collect(
                 except Exception as e:
                     # Database or other errors
                     logger.exception("[voice] Database error for call=%s: %s", CallSid, e)
+                    logger.error("[voice] Debug info - starts_at_utc type=%s value=%s", type(starts_at_utc), starts_at_utc)
+                    logger.error("[voice] Debug info - user_id=%s duration_min=%s notes=%s", user.id if 'user' in locals() else 'None', duration_min, notes)
                     sess.data.pop("starts_at_utc", None)
                     sess.step = "ask_time"
                     save_session(sess)
