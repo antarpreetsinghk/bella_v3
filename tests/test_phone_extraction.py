@@ -41,10 +41,10 @@ class TestPhoneExtraction:
     @pytest.mark.unit
     def test_extract_digits_mixed(self):
         """Test mixed digit and word formats"""
-        # The function first extracts actual digits, then falls back to words
-        assert _extract_digits("4 one 6 five five five") == "46"  # Only extracts actual digits first
-        assert _extract_digits("my number is 4 one six") == "4"   # Only extracts actual digits first
-        assert _extract_digits("call me at oh 4 1 6") == "416"   # Extracts actual digits first
+        # The function handles mixed word and digit input for voice applications
+        assert _extract_digits("4 one 6 five five five") == "416555"  # Converts mixed input to full number
+        assert _extract_digits("my number is 4 one six") == "416"     # Converts mixed input, ignoring non-digits/words
+        assert _extract_digits("call me at oh 4 1 6") == "0416"      # Converts 'oh' to '0' and extracts digits
 
     @pytest.mark.essential
     @pytest.mark.unit

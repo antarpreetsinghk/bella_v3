@@ -12,12 +12,36 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 import os
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 
 # Test configuration
 FUNCTION_NAME = "bella-voice-app"
 FUNCTION_URL = "https://bhcnf2i6eh3bxnr6lrnt4ubouy0obfjy.lambda-url.us-east-1.on.aws"
 REGION = "us-east-1"
 TIMEOUT = 30
+
+
+def has_aws_credentials():
+    """Check if AWS credentials are available"""
+    try:
+        # Try to create a session and check credentials
+        session = boto3.Session()
+        credentials = session.get_credentials()
+        if credentials is None:
+            return False
+        # Try to get caller identity to verify credentials work
+        sts = session.client('sts')
+        sts.get_caller_identity()
+        return True
+    except (NoCredentialsError, PartialCredentialsError, Exception):
+        return False
+
+
+# Skip all AWS tests if credentials not available
+pytestmark = pytest.mark.skipif(
+    not has_aws_credentials(),
+    reason="AWS credentials not available - skipping production Lambda tests"
+)
 
 
 class TestLambdaHealth:
