@@ -68,8 +68,8 @@ jobs:
         TWILIO_ACCOUNT_SID: test_sid
         TWILIO_PHONE_NUMBER: +15551234567
       run: |
-        # Run essential tests only in CI for faster deployment
-        pytest tests/ -m "essential" --tb=short --quiet --disable-warnings -x --timeout=300
+        # Run essential tests only in CI for faster deployment, excluding production tests that require deployed Lambda
+        pytest tests/ -m "essential" --ignore=tests/production/ --tb=short --quiet --disable-warnings -x --timeout=300
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
