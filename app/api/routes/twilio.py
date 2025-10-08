@@ -119,12 +119,7 @@ def _extract_digits(s: str) -> str:
     if not s:
         return ""
 
-    # First try direct digit extraction
-    digits = re.sub(r"\D+", "", s)
-    if digits:
-        return digits
-
-    # Handle word-to-digit conversion for speech-to-text
+    # Handle both word-to-digit conversion and direct digits
     word_to_digit = {
         "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
         "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
@@ -138,6 +133,10 @@ def _extract_digits(s: str) -> str:
             digit_result += word_to_digit[word]
         elif word.isdigit():
             digit_result += word
+
+    # If no word/digit conversion worked, try direct digit extraction
+    if not digit_result:
+        digit_result = re.sub(r"\D+", "", s)
 
     logger.info("[extract_digits] input='%s' -> digits='%s'", s, digit_result)
     return digit_result

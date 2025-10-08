@@ -201,10 +201,15 @@ def format_phone_for_speech(phone: str) -> str:
 
 async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[datetime]:
     """
-    Enhanced Canadian time extraction with dateparser and advanced preprocessing.
+    Enhanced Canadian time extraction with parsedatetime and dateutil.
+    Handles Canadian English time expressions and timezone conversion.
+
+    Args:
+        speech: Speech text containing time expression
+        llm_fallback: Optional LLM fallback function
 
     Returns:
-        UTC datetime object or None
+        datetime object in UTC timezone, or None if parsing failed
     """
     if not speech or not speech.strip():
         return None
@@ -212,162 +217,162 @@ async def extract_canadian_time(speech: str, llm_fallback=None) -> Optional[date
     speech = speech.strip()
     logger.info("[time_canadian] processing: '%s'", speech)
 
-    # Enhanced preprocessing: Handle more speech patterns and speech-to-text errors
-    original_speech = speech
-    speech_lower = speech.lower()
+    # Canadian timezone (Edmonton/Calgary - Mountain Time)
+    from zoneinfo import ZoneInfo
+    CANADIAN_TZ = ZoneInfo("America/Edmonton")
+    UTC_TZ = ZoneInfo("UTC")
 
-    # Enhanced pattern handling for speech-to-text artifacts
-    preprocessing_patterns = [
-        # Handle periods after phrases
-        ("next week.", "next week"),
-        ("this week.", "this week"),
-        ("tomorrow.", "tomorrow"),
-        ("monday.", "monday"),
-        ("tuesday.", "tuesday"),
-        ("wednesday.", "wednesday"),
-        ("thursday.", "thursday"),
-        ("friday.", "friday"),
-        ("saturday.", "saturday"),
-        ("sunday.", "sunday"),
-        # Handle common speech-to-text time errors
-        ("a.m.", "AM"),
-        ("p.m.", "PM"),
-        ("am.", "AM"),
-        ("pm.", "PM"),
-        ("o'clock", "o clock"),
-        ("o clock", ""),
-        ("thirty", "30"),
-        ("fifteen", "15"),
-        ("fourty", "40"),  # Common speech error
-        ("forty", "40"),
-        ("o'clock", ""),
-    ]
-
-    for old_pattern, new_pattern in preprocessing_patterns:
-        speech = speech.replace(old_pattern, new_pattern)
-
-    # Handle complex phrase patterns
-    if speech_lower.startswith("next week"):
-        cleaned = speech[9:].strip()  # Remove "next week"
-        if cleaned:
-            speech = f"next {cleaned}"
-    elif speech_lower.startswith("this week"):
-        cleaned = speech[9:].strip()  # Remove "this week"
-        if cleaned:
-            speech = f"this {cleaned}"
-    elif speech_lower.startswith("tomorrow"):
-        cleaned = speech[8:].strip()  # Remove "tomorrow"
-        if cleaned and not cleaned.startswith("at"):
-            speech = f"tomorrow {cleaned}"
-
-    # Clean extra spaces
-    speech = re.sub(r'\s+', ' ', speech).strip()
-
-    if speech != original_speech:
-        logger.debug("[time_canadian] preprocessed: '%s' -> '%s'", original_speech, speech)
-
-    # Layer 1: dateparser library (better natural language processing)
-    try:
-        import dateparser
-
-        # Configure dateparser for Canadian context
-        settings = {
-            'TIMEZONE': 'America/Edmonton',
-            'RETURN_AS_TIMEZONE_AWARE': True,
-            'PREFER_DATES_FROM': 'future',
-            'PREFER_DAY_OF_MONTH': 'first',
-            'SKIP_TOKENS': ['at', 'on', 'for'],  # Skip common filler words
-        }
-
-        result = dateparser.parse(speech, settings=settings)
-        if result:
-            utc_result = result.astimezone(timezone.utc)
-            logger.info("[time_canadian] dateparser success: '%s' -> %s", speech, utc_result)
-            return utc_result
-
-    except ImportError:
-        logger.debug("[time_canadian] dateparser not available, using fallback")
-    except Exception as e:
-        logger.debug("[time_canadian] dateparser failed: %s", e)
-
-    # Layer 2: parsedatetime (excellent for Canadian English)
+    # Layer 1: parsedatetime (handles natural language)
     try:
         cal = parsedatetime.Calendar()
         time_struct, parse_status = cal.parse(speech)
-        if parse_status:
-            # Convert to datetime and assume local timezone
+
+        if parse_status != 0:  # 0 means no time found
+            # Convert to datetime
             dt = datetime(*time_struct[:6])
-            # Use Edmonton timezone to match business hours
-            from zoneinfo import ZoneInfo
-            local_dt = dt.replace(tzinfo=ZoneInfo("America/Edmonton"))
-            result = local_dt.astimezone(timezone.utc)
-            logger.info("[time_canadian] parsedatetime success: '%s' -> %s", speech, result)
-            return result
+
+            # Assume local (Canadian) timezone
+            dt = dt.replace(tzinfo=CANADIAN_TZ)
+
+            # Ensure it's in the future
+            now_local = datetime.now(CANADIAN_TZ)
+            if dt <= now_local:
+                # If time is in the past, assume next day
+                dt = dt.replace(day=dt.day + 1)
+
+            # Convert to UTC
+            dt_utc = dt.astimezone(UTC_TZ)
+            logger.info("[time_canadian] parsedatetime success: %s", dt_utc)
+            return dt_utc
+
     except Exception as e:
         logger.debug("[time_canadian] parsedatetime failed: %s", e)
 
-    # Layer 3: dateutil parser (robust fallback)
+    # Layer 2: dateutil parser (handles various formats)
     try:
-        # Try fuzzy parsing
-        dt = parser.parse(speech, fuzzy=True)
+        # Try parsing with dateutil
+        dt = parser.parse(speech, fuzzy=True, default=datetime.now(CANADIAN_TZ))
+
+        # Ensure timezone is set
         if dt.tzinfo is None:
-            from zoneinfo import ZoneInfo
-            dt = dt.replace(tzinfo=ZoneInfo("America/Edmonton"))
-        result = dt.astimezone(timezone.utc)
-        logger.info("[time_canadian] dateutil success: '%s' -> %s", speech, result)
-        return result
+            dt = dt.replace(tzinfo=CANADIAN_TZ)
+
+        # Ensure it's in the future
+        now_local = datetime.now(CANADIAN_TZ)
+        if dt <= now_local:
+            # If time is in the past, assume next day
+            dt = dt.replace(day=dt.day + 1)
+
+        # Convert to UTC
+        dt_utc = dt.astimezone(UTC_TZ)
+        logger.info("[time_canadian] dateutil success: %s", dt_utc)
+        return dt_utc
+
     except Exception as e:
         logger.debug("[time_canadian] dateutil failed: %s", e)
 
-    # Layer 4: Pattern-based extraction for common formats
+    # Layer 3: Manual regex patterns for common cases
     try:
-        # Try to extract common time patterns manually
-        time_patterns = [
-            r'(\w+day)\s+at\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)',  # "Monday at 2 PM"
-            r'(\w+day)\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)',       # "Monday 2 PM"
-            r'(next|this)\s+(\w+day)\s+at\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)',  # "next Monday at 2 PM"
-            r'(tomorrow|today)\s+at\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)',        # "tomorrow at 2 PM"
+        # Common time patterns
+        patterns = [
+            # "2 PM", "10 AM", "3:30 PM"
+            (r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)', lambda m: _parse_12hour(m, CANADIAN_TZ)),
+            # "14:30", "2:30" (24-hour format)
+            (r'(\d{1,2}):(\d{2})', lambda m: _parse_24hour(m, CANADIAN_TZ)),
+            # "tomorrow at 2", "next Tuesday at 10"
+            (r'(tomorrow|next\s+\w+)\s+at\s+(\d{1,2})', lambda m: _parse_relative_time(m, CANADIAN_TZ)),
         ]
 
-        for pattern in time_patterns:
-            match = re.search(pattern, speech, re.IGNORECASE)
+        speech_lower = speech.lower()
+        for pattern, handler in patterns:
+            match = re.search(pattern, speech_lower)
             if match:
-                # Try to construct a parseable string
-                groups = match.groups()
-                if len(groups) >= 3:
-                    constructed = " ".join(groups)
-                    try:
-                        dt = parser.parse(constructed, fuzzy=True)
-                        if dt.tzinfo is None:
-                            from zoneinfo import ZoneInfo
-                            dt = dt.replace(tzinfo=ZoneInfo("America/Edmonton"))
-                        result = dt.astimezone(timezone.utc)
-                        logger.info("[time_canadian] pattern success: '%s' -> %s", speech, result)
-                        return result
-                    except:
-                        continue
+                dt = handler(match)
+                if dt:
+                    dt_utc = dt.astimezone(UTC_TZ)
+                    logger.info("[time_canadian] regex success: %s", dt_utc)
+                    return dt_utc
 
     except Exception as e:
-        logger.debug("[time_canadian] pattern extraction failed: %s", e)
+        logger.debug("[time_canadian] regex parsing failed: %s", e)
 
-    # Layer 5: LLM fallback if provided
+    # Layer 4: LLM fallback if provided
     if llm_fallback:
         try:
             llm_result = await llm_fallback(speech)
             if llm_result and llm_result != speech:
-                # Try to parse LLM result as ISO format first
-                try:
-                    dt = datetime.fromisoformat(llm_result.replace('Z', '+00:00'))
-                    logger.info("[time_canadian] LLM ISO success: '%s' -> %s", speech, dt)
-                    return dt.astimezone(timezone.utc)
-                except:
-                    # Recursive parse of LLM result
-                    return await extract_canadian_time(llm_result, None)
+                return await extract_canadian_time(llm_result, None)  # Recursive without LLM
         except Exception as e:
             logger.warning("[time_canadian] LLM fallback failed: %s", e)
 
     logger.warning("[time_canadian] all methods failed for: '%s'", speech)
     return None
+
+
+def _parse_12hour(match, tz):
+    """Parse 12-hour format time"""
+    try:
+        hour = int(match.group(1))
+        minute = int(match.group(2)) if match.group(2) else 0
+        ampm = match.group(3).lower()
+
+        # Convert to 24-hour format
+        if ampm == 'pm' and hour != 12:
+            hour += 12
+        elif ampm == 'am' and hour == 12:
+            hour = 0
+
+        # Create datetime for today
+        now = datetime.now(tz)
+        dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+        # If time is in the past, assume tomorrow
+        if dt <= now:
+            dt = dt.replace(day=dt.day + 1)
+
+        return dt
+    except:
+        return None
+
+
+def _parse_24hour(match, tz):
+    """Parse 24-hour format time"""
+    try:
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+
+        # Create datetime for today
+        now = datetime.now(tz)
+        dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+        # If time is in the past, assume tomorrow
+        if dt <= now:
+            dt = dt.replace(day=dt.day + 1)
+
+        return dt
+    except:
+        return None
+
+
+def _parse_relative_time(match, tz):
+    """Parse relative time expressions"""
+    try:
+        relative = match.group(1).lower()
+        hour = int(match.group(2))
+
+        now = datetime.now(tz)
+
+        if relative == 'tomorrow':
+            dt = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+            dt = dt.replace(day=dt.day + 1)
+        else:
+            # For "next Tuesday", etc., use parsedatetime as fallback
+            dt = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+
+        return dt
+    except:
+        return None
+
 
 
 def clean_speech_artifacts(speech: str, extracted_name: str) -> str:
