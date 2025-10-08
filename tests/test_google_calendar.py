@@ -40,10 +40,14 @@ class TestGoogleCalendarService:
     """Test Google Calendar service functionality"""
 
     @patch.dict(os.environ, {'GOOGLE_CALENDAR_ENABLED': 'false'})
+    @patch('app.services.google_calendar._calendar_service', None)
     @pytest.mark.essential
     @pytest.mark.integration
     def test_get_calendar_service_disabled(self):
         """Test calendar service when disabled"""
+        # Clear the cache to test the disabled state
+        import app.services.google_calendar
+        app.services.google_calendar._calendar_service = None
         service = get_calendar_service()
         assert service is None
 
