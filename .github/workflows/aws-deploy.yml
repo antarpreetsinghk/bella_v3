@@ -53,14 +53,14 @@ jobs:
 
     - name: Run database migrations
       env:
-        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_bella
+        DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_bella
       run: |
         alembic upgrade head
 
     - name: Run tests
       env:
         APP_ENV: testing
-        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_bella
+        DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_bella
         OPENAI_API_KEY: test_key
         BELLA_API_KEY: test_api_key
         TWILIO_AUTH_TOKEN: test_token
