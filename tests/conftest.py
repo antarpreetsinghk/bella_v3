@@ -1,22 +1,45 @@
 #!/usr/bin/env python3
 """
-Pytest configuration and shared fixtures for the test suite.
+Optimized pytest configuration and shared fixtures for fast test execution.
+Includes automatic mocking, performance monitoring, and smart test optimization.
 """
 
 import pytest
+import pytest_asyncio
 import os
 import sys
-from unittest.mock import patch
+import time
+import asyncio
+from unittest.mock import patch, Mock, AsyncMock
+from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# Configure pytest-asyncio
+pytest_asyncio.asyncio_mode = "auto"
+
+# Test database configuration
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create an instance of the default event loop for the test session."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
 
 @pytest.fixture(autouse=True)
 def setup_test_environment():
-    """Set up test environment variables"""
+    """Set up optimized test environment variables"""
     test_env = {
         'APP_ENV': 'testing',
+        'DATABASE_URL': TEST_DATABASE_URL,  # Use in-memory SQLite for speed
         'POSTGRES_HOST': 'localhost',
         'POSTGRES_PORT': '5432',
         'POSTGRES_DB': 'test_bella',
@@ -113,3 +136,107 @@ def sample_appointment_data():
         'duration_min': 30,
         'notes': 'Regular appointment scheduled via voice'
     }
+
+
+# Performance monitoring and auto-optimization
+@pytest.fixture(autouse=True)
+def auto_mock_for_fast_tests(request):
+    """Automatically mock external services for smoke and unit tests"""
+    node = request.node
+
+    # Auto-mock for smoke and unit tests
+    if node.get_closest_marker("smoke") or node.get_closest_marker("unit"):
+        patches = []
+
+        # Mock Redis
+        redis_patch = patch('app.services.redis_session.get_redis_client')
+        redis_mock = redis_patch.start()
+        async_redis = AsyncMock()
+        async_redis.get = AsyncMock(return_value=None)
+        async_redis.set = AsyncMock(return_value=True)
+        async_redis.delete = AsyncMock(return_value=1)
+        redis_mock.return_value = async_redis
+        patches.append(redis_patch)
+
+        # Mock HTTP clients for external calls
+        http_patch = patch('httpx.AsyncClient')
+        http_mock = http_patch.start()
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"status": "ok"}'
+        mock_response.json.return_value = {"status": "ok"}
+        mock_response.elapsed.total_seconds.return_value = 0.01
+        http_mock.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+        http_mock.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+        patches.append(http_patch)
+
+        # Mock Google Calendar
+        calendar_patch = patch('app.services.google_calendar.create_calendar_event')
+        calendar_mock = calendar_patch.start()
+        calendar_mock.return_value = {"id": "test_event", "htmlLink": "https://test.com"}
+        patches.append(calendar_patch)
+
+        yield
+
+        # Clean up patches
+        for patch_obj in patches:
+            patch_obj.stop()
+    else:
+        yield
+
+
+@pytest.fixture(autouse=True)
+def monitor_test_performance(request):
+    """Monitor test performance and warn about slow tests"""
+    start_time = time.time()
+    yield
+    end_time = time.time()
+    duration = end_time - start_time
+
+    node = request.node
+    test_name = node.name
+
+    # Performance thresholds based on markers
+    if node.get_closest_marker("smoke") and duration > 1.0:
+        print(f"⚠️ Smoke test {test_name} took {duration:.2f}s (should be < 1s)")
+    elif node.get_closest_marker("essential") and duration > 5.0:
+        print(f"⚠️ Essential test {test_name} took {duration:.2f}s (should be < 5s)")
+    elif not node.get_closest_marker("slow") and duration > 10.0:
+        print(f"⚠️ Test {test_name} took {duration:.2f}s (consider marking as @pytest.mark.slow)")
+
+
+# Pytest configuration hooks
+def pytest_configure(config):
+    """Configure pytest with custom markers"""
+    config.addinivalue_line("markers", "smoke: Quick validation tests (< 30 seconds total)")
+    config.addinivalue_line("markers", "essential: Core functionality tests (< 2 minutes total)")
+    config.addinivalue_line("markers", "slow: Long-running tests (> 30 seconds each)")
+    config.addinivalue_line("markers", "production: Production environment tests")
+    config.addinivalue_line("markers", "integration: Integration tests with external services")
+    config.addinivalue_line("markers", "unit: Pure unit tests with no external dependencies")
+
+
+def pytest_collection_modifyitems(config, items):
+    """Optimize test collection and ordering"""
+    # Sort tests by execution speed (smoke first, slow last)
+    def test_priority(item):
+        if item.get_closest_marker("smoke"):
+            return 0
+        elif item.get_closest_marker("essential"):
+            return 1
+        elif item.get_closest_marker("integration"):
+            return 2
+        elif item.get_closest_marker("slow"):
+            return 3
+        else:
+            return 1  # Default to essential priority
+
+    items[:] = sorted(items, key=test_priority)
+
+
+def pytest_runtest_setup(item):
+    """Setup logic for individual test runs"""
+    # Skip production tests unless explicitly requested
+    if item.get_closest_marker("production"):
+        if not (os.environ.get("CI") or os.environ.get("RUN_PRODUCTION_TESTS")):
+            pytest.skip("Production tests skipped (set RUN_PRODUCTION_TESTS=1 to run)")

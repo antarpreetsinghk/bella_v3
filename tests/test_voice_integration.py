@@ -22,6 +22,8 @@ def client():
     return TestClient(app)
 
 
+@pytest.mark.essential
+@pytest.mark.integration
 def test_voice_entry_with_caller_id(client):
     """Test voice entry with valid caller ID"""
     response = client.post("/twilio/voice", data={
@@ -36,6 +38,8 @@ def test_voice_entry_with_caller_id(client):
     assert "Thanks for calling" in response.text
 
 
+@pytest.mark.essential
+@pytest.mark.integration
 def test_voice_entry_without_caller_id(client):
     """Test voice entry without caller ID"""
     response = client.post("/twilio/voice", data={
@@ -49,6 +53,8 @@ def test_voice_entry_without_caller_id(client):
     assert "<Gather" in response.text
 
 
+@pytest.mark.essential
+@pytest.mark.integration
 def test_voice_entry_invalid_phone(client):
     """Test voice entry with invalid phone number"""
     response = client.post("/twilio/voice", data={
@@ -62,6 +68,8 @@ def test_voice_entry_invalid_phone(client):
 
 
 @patch('app.services.redis_session.get_redis_client')
+@pytest.mark.essential
+@pytest.mark.integration
 def test_voice_with_redis_disabled(mock_redis, client):
     """Test voice functionality when Redis is disabled"""
     # Mock Redis as disabled
@@ -77,6 +85,8 @@ def test_voice_with_redis_disabled(mock_redis, client):
     assert "<Response>" in response.text
 
 
+@pytest.mark.essential
+@pytest.mark.integration
 def test_voice_collect_endpoint(client):
     """Test voice collection endpoint"""
     # First establish a session
@@ -97,6 +107,8 @@ def test_voice_collect_endpoint(client):
     assert "<Response>" in response.text
 
 
+@pytest.mark.essential
+@pytest.mark.integration
 def test_voice_collect_with_appointment_data(client):
     """Test voice collection with full appointment data"""
     # Establish session
@@ -118,6 +130,8 @@ def test_voice_collect_with_appointment_data(client):
 
 
 @patch('app.services.booking.book_from_transcript')
+@pytest.mark.essential
+@pytest.mark.integration
 async def test_voice_collect_booking_success(mock_booking, client):
     """Test successful appointment booking flow"""
     # Mock successful booking
@@ -144,6 +158,8 @@ async def test_voice_collect_booking_success(mock_booking, client):
     assert "<Response>" in response.text
 
 
+@pytest.mark.integration
+@pytest.mark.slow
 def test_voice_timeout_handling(client):
     """Test voice endpoint timeout handling"""
     response = client.post("/twilio/voice/collect", data={
@@ -157,6 +173,8 @@ def test_voice_timeout_handling(client):
     assert "<Say" in response.text  # Should have fallback speech
 
 
+@pytest.mark.essential
+@pytest.mark.integration
 def test_voice_error_handling(client):
     """Test voice endpoint error handling"""
     response = client.post("/twilio/voice/collect", data={
@@ -169,6 +187,8 @@ def test_voice_error_handling(client):
 
 
 @patch('app.services.google_calendar.create_calendar_event')
+@pytest.mark.essential
+@pytest.mark.integration
 async def test_voice_with_calendar_integration(mock_calendar, client):
     """Test voice flow with Google Calendar integration"""
     # Mock calendar integration (disabled by default)
@@ -187,6 +207,8 @@ async def test_voice_with_calendar_integration(mock_calendar, client):
 class TestVoiceFlowIntegration:
     """Integration tests for complete voice call flows"""
 
+    @pytest.mark.essential
+    @pytest.mark.integration
     def test_complete_happy_path(self, client):
         """Test a complete successful call flow"""
         call_sid = "TEST_HAPPY_PATH"
@@ -216,6 +238,8 @@ class TestVoiceFlowIntegration:
         })
         assert response3.status_code == 200
 
+    @pytest.mark.essential
+    @pytest.mark.integration
     def test_call_with_retries(self, client):
         """Test call flow with speech recognition retries"""
         call_sid = "TEST_RETRIES"

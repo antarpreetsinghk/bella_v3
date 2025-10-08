@@ -140,3 +140,10 @@ logs/
 # Claude AI settings that may contain credentials
 .claude/settings.local.json
 .claude/**/settings.local.json
+
+# Terraform
+terraform.tfvars
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl

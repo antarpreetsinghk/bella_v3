@@ -1,0 +1,29 @@
+{
+  "Variables": {
+    "APP_ENV": "production",
+    "DATABASE_URL": "postgresql+asyncpg://postgres:BellaPostgres2025@bella-db.cvc86oiqsam9.ca-central-1.rds.amazonaws.com:5432/postgres",
+    "POSTGRES_HOST": "bella-db.cvc86oiqsam9.ca-central-1.rds.amazonaws.com",
+    "POSTGRES_PORT": "5432",
+    "POSTGRES_DB": "postgres",
+    "POSTGRES_USER": "postgres",
+    "POSTGRES_PASSWORD": "BellaPostgres2025",
+    "OPENAI_API_KEY": "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",
+    "OPENAI_MODEL": "gpt-4o-mini",
+    "REQUEST_MAX_TOKENS": "4000",
+    "RESPONSE_MAX_TOKENS": "512",
+    "BELLA_API_KEY": "kam1234",
+    "ADMIN_USER": "antar",
+    "ADMIN_PASS": "kam1234",
+    "CSRF_SECRET": "kam1234",
+    "TWILIO_AUTH_TOKEN": "11be258d711c0741531b6d4cddc8b0ae",
+    "TWILIO_ACCOUNT_SID": "AC32c4cd1caa9e3c32d9c9d2e03b58f994",
+    "TWILIO_PHONE_NUMBER": "+14382565719",
+    "REDIS_URL": "redis://bella-redis.0dludc.0001.cac1.cache.amazonaws.com:6379",
+    "GOOGLE_CALENDAR_ENABLED": "true",
+    "GOOGLE_CALENDAR_ID": "primary",
+    "BUSINESS_EMAIL": "bella-calendar@bella-voice-booking.iam.gserviceaccount.com",
+    "PRODUCTION_BASE_URL": "https://bella-alb-1924818779.ca-central-1.elb.amazonaws.com",
+    "TWILIO_WEBHOOK_URL": "https://bhcnf2i6eh3bxnr6lrnt4ubouy0obfjy.lambda-url.us-east-1.on.aws/twilio/voice",
+    "TZ": "America/Toronto"
+  }
+}

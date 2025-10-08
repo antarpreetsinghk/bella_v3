@@ -44,6 +44,8 @@ class TestBookingService:
     @patch('app.services.booking.create_user')
     @patch('app.services.booking.create_appointment_unique')
     @patch('app.services.booking.create_calendar_event')
+    @pytest.mark.essential
+    @pytest.mark.unit
     async def test_successful_booking_new_user(
         self, mock_calendar, mock_create_appt, mock_create_user,
         mock_get_user, mock_extract, mock_db_session
@@ -190,6 +192,8 @@ class TestBookingService:
     @patch('app.services.booking.create_user')
     @patch('app.services.booking.create_appointment_unique')
     @patch('app.services.booking.create_calendar_event')
+    @pytest.mark.essential
+    @pytest.mark.integration
     async def test_booking_calendar_integration_failure(
         self, mock_calendar, mock_create_appt, mock_create_user,
         mock_get_user, mock_extract, mock_db_session
@@ -351,6 +355,8 @@ class TestBookingUtilityFunctions:
             assert result.created is True
             mock_extract.assert_called_once()
 
+    @pytest.mark.essential
+    @pytest.mark.unit
     def test_booking_result_structure(self):
         """Test BookResult data structure"""
         result = BookResult(

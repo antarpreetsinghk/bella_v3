@@ -40,12 +40,16 @@ class TestGoogleCalendarService:
     """Test Google Calendar service functionality"""
 
     @patch.dict(os.environ, {'GOOGLE_CALENDAR_ENABLED': 'false'})
+    @pytest.mark.essential
+    @pytest.mark.integration
     def test_get_calendar_service_disabled(self):
         """Test calendar service when disabled"""
         service = get_calendar_service()
         assert service is None
 
     @patch.dict(os.environ, {'GOOGLE_CALENDAR_ENABLED': 'true', 'GOOGLE_SERVICE_ACCOUNT_JSON': ''})
+    @pytest.mark.essential
+    @pytest.mark.integration
     def test_get_calendar_service_no_credentials(self):
         """Test calendar service with missing credentials"""
         service = get_calendar_service()
@@ -55,6 +59,8 @@ class TestGoogleCalendarService:
         'GOOGLE_CALENDAR_ENABLED': 'true',
         'GOOGLE_SERVICE_ACCOUNT_JSON': 'invalid_json'
     })
+    @pytest.mark.essential
+    @pytest.mark.integration
     def test_get_calendar_service_invalid_json(self):
         """Test calendar service with invalid JSON credentials"""
         service = get_calendar_service()

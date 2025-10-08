@@ -14,6 +14,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from fastapi.testclient import TestClient
 
 
+@pytest.mark.smoke
+@pytest.mark.unit
 def test_health_endpoint():
     """Test that health endpoint returns 200 and proper structure"""
     # Import here to avoid startup issues in CI
@@ -32,6 +34,7 @@ def test_health_endpoint():
         assert data["ok"] is True
 
 
+@pytest.mark.smoke
 def test_ready_endpoint():
     """Test that ready endpoint returns 200 or handles gracefully"""
     from app.main import app
@@ -53,6 +56,8 @@ def test_ready_endpoint():
         pass
 
 
+@pytest.mark.integration
+@pytest.mark.smoke
 def test_twilio_voice_endpoint_structure():
     """Test that voice endpoint returns valid TwiML structure"""
     # Skip this test due to Pydantic forward reference issues in current FastAPI version
@@ -60,6 +65,8 @@ def test_twilio_voice_endpoint_structure():
     pytest.skip("Skipping due to Pydantic forward reference issue - functionality works in production")
 
 
+@pytest.mark.integration
+@pytest.mark.smoke
 def test_api_key_protection():
     """Test that protected endpoints require API key"""
     from app.main import app
@@ -74,6 +81,7 @@ def test_api_key_protection():
     assert response.status_code in [401, 404]
 
 
+@pytest.mark.smoke
 def test_cors_headers():
     """Test that CORS headers are properly set"""
     from app.main import app
