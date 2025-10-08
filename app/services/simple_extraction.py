@@ -90,9 +90,9 @@ def _clean_and_format_name(text: str) -> str:
     clean_words = []
 
     for word in words[:4]:  # Limit to 4 words for full names
-        # Remove non-alphabetic characters except apostrophes and hyphens (preserve Unicode letters)
-        clean_word = re.sub(r"[^\w'\-]", "", word, flags=re.UNICODE)
-        if clean_word:  # Accept any non-empty word including single letters and numbers
+        # Remove non-alphabetic characters except apostrophes and hyphens (preserve Unicode letters including CJK, remove digits)
+        clean_word = re.sub(r"[^a-zA-ZÀ-ÿĀ-žА-я\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff'\-]", "", word, flags=re.UNICODE)
+        if clean_word:  # Accept any non-empty word including single letters (numbers now removed)
             # Properly capitalize hyphenated names like "Jean-Pierre" and apostrophe names like "O'Connor"
             if '-' in clean_word:
                 parts = clean_word.split('-')

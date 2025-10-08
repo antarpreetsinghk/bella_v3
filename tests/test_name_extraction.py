@@ -104,9 +104,9 @@ class TestNameExtraction:
     @pytest.mark.unit
     def test_extract_name_simple_foreign_names(self):
         """Test extraction of non-English names"""
-        # The regex removes non-ASCII characters, so accented characters get removed
-        assert extract_name_simple("José García") == "Jos Garca"  # Accents removed
-        assert extract_name_simple("François Dubois") == "Franois Dubois"  # Accents removed
+        # The regex now preserves Unicode characters for better international support
+        assert extract_name_simple("José García") == "José García"  # Unicode preserved
+        assert extract_name_simple("François Dubois") == "François Dubois"  # Unicode preserved
         # Non-Latin characters - function falls back to title case
         result = extract_name_simple("李小明")
         assert result == "李小明"  # Falls back to title case of original
@@ -183,7 +183,7 @@ class TestNameExtractionEdgeCases:
 
         # Questions
         result = extract_name_simple("what time is it")
-        assert result == "What Time Is"  # Truncated to 3 words
+        assert result == "What Time Is It"  # Limited to 4 words (consistent with name processing)
 
     @pytest.mark.essential
     @pytest.mark.unit
