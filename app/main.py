@@ -67,6 +67,19 @@ except Exception as e:
 async def healthz():
     return {"ok": True}
 
+@app.get("/", include_in_schema=False)
+async def root():
+    """Simple health check endpoint that returns JSON status"""
+    from app.utils.secrets import get_config_value
+
+    calendar_enabled = get_config_value("GOOGLE_CALENDAR_ENABLED", "false").lower() == "true"
+
+    return {
+        "status": "ok",
+        "message": "Bella Voice App - Calendar Integration Active",
+        "calendar_enabled": str(calendar_enabled).lower()
+    }
+
 @app.get("/version", include_in_schema=False)
 async def version():
     import subprocess

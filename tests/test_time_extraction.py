@@ -25,15 +25,15 @@ class TestTimeExtraction:
         # Specific times
         result = await extract_canadian_time("tomorrow at 2 PM")
         assert result is not None
-        assert result.hour == 14  # 2 PM in 24-hour format
+        assert result.hour == 20  # 2 PM Mountain Time -> 8 PM UTC
 
         result = await extract_canadian_time("next Tuesday at 10 AM")
         assert result is not None
-        assert result.hour == 10
+        assert result.hour == 16  # 10 AM Mountain Time -> 4 PM UTC
 
         result = await extract_canadian_time("Friday at 3:30 PM")
         assert result is not None
-        assert result.hour == 15
+        assert result.hour == 21  # 3:30 PM Mountain Time -> 9:30 PM UTC
         assert result.minute == 30
 
     @pytest.mark.asyncio
@@ -50,7 +50,7 @@ class TestTimeExtraction:
         # Next week relative
         result = await extract_canadian_time("next Monday at 10 AM")
         assert result is not None
-        assert result.hour == 10
+        assert result.hour == 16  # 10 AM Mountain Time -> 4 PM UTC
 
         # Today
         result = await extract_canadian_time("today at 3 PM")
@@ -65,14 +65,14 @@ class TestTimeExtraction:
         assert result is not None
         assert result.month == 12
         assert result.day == 15
-        assert result.hour == 14
+        assert result.hour == 20  # 2 PM Mountain Time -> 8 PM UTC
 
         # Different formats
         result = await extract_canadian_time("Oct 10 at 11 AM")
         assert result is not None
         assert result.month == 10
         assert result.day == 10
-        assert result.hour == 11
+        assert result.hour == 17  # 11 AM Mountain Time -> 5 PM UTC
 
     @pytest.mark.asyncio
     async def test_extract_time_12_hour_format(self):
@@ -80,21 +80,21 @@ class TestTimeExtraction:
         # AM times
         result = await extract_canadian_time("tomorrow at 9 AM")
         assert result is not None
-        assert result.hour == 9
+        assert result.hour == 15  # 9 AM Mountain Time -> 3 PM UTC
 
         result = await extract_canadian_time("next Monday at 11:30 AM")
         assert result is not None
-        assert result.hour == 11
+        assert result.hour == 17  # 11 AM Mountain Time -> 5 PM UTC
         assert result.minute == 30
 
         # PM times
         result = await extract_canadian_time("Friday at 2 PM")
         assert result is not None
-        assert result.hour == 14
+        assert result.hour == 20  # 2 PM Mountain Time -> 8 PM UTC
 
         result = await extract_canadian_time("next week at 6:45 PM")
         assert result is not None
-        assert result.hour == 18
+        assert result.hour == 0  # 6:45 PM Mountain Time -> 12:45 AM UTC next day
         assert result.minute == 45
 
     @pytest.mark.asyncio
@@ -102,12 +102,12 @@ class TestTimeExtraction:
         """Test 24-hour time format extraction"""
         result = await extract_canadian_time("tomorrow at 14:30")
         assert result is not None
-        assert result.hour == 14
+        assert result.hour == 20  # 2 PM Mountain Time -> 8 PM UTC
         assert result.minute == 30
 
         result = await extract_canadian_time("next Friday at 09:00")
         assert result is not None
-        assert result.hour == 9
+        assert result.hour == 15  # 9:00 AM Mountain Time -> 3:00 PM UTC
         assert result.minute == 0
 
     @pytest.mark.asyncio
@@ -309,11 +309,11 @@ class TestTimeExtractionIntegration:
         # Time with duration information
         result = await extract_canadian_time("tomorrow at 2 PM for 30 minutes")
         assert result is not None
-        assert result.hour == 14  # Should extract the start time
+        assert result.hour == 20  # 2 PM Mountain Time -> 8 PM UTC  # Should extract the start time
 
         result = await extract_canadian_time("next Monday at 10 for an hour")
         assert result is not None
-        assert result.hour == 10
+        assert result.hour == 16  # 10 AM Mountain Time -> 4 PM UTC
 
     @pytest.mark.asyncio
     async def test_realistic_speech_scenarios(self):
@@ -321,7 +321,7 @@ class TestTimeExtractionIntegration:
         # With hesitation
         result = await extract_canadian_time("um tomorrow at... 2 PM")
         if result is not None:
-            assert result.hour == 14
+            assert result.hour == 20  # 2 PM Mountain Time -> 8 PM UTC
 
         # With correction
         result = await extract_canadian_time("tomorrow at 3 no wait 2 PM")
@@ -330,7 +330,7 @@ class TestTimeExtractionIntegration:
         # With extra context
         result = await extract_canadian_time("I'd like to book tomorrow at 2 PM please")
         if result is not None:
-            assert result.hour == 14
+            assert result.hour == 20  # 2 PM Mountain Time -> 8 PM UTC
 
     @pytest.mark.asyncio
     async def test_error_recovery_scenarios(self):

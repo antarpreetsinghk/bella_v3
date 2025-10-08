@@ -81,13 +81,24 @@ def _clean_and_format_name(text: str) -> str:
     clean_words = []
 
     for word in words[:4]:  # Limit to 4 words for full names
-        # Remove non-alphabetic characters except apostrophes and hyphens
-        clean_word = re.sub(r"[^a-zA-Z'\-]", "", word)
-        if clean_word and len(clean_word) > 1:  # Avoid single letters
-            clean_words.append(clean_word.capitalize())
+        # Remove non-alphabetic characters except apostrophes and hyphens (preserve Unicode letters)
+        clean_word = re.sub(r"[^\w'\-]", "", word, flags=re.UNICODE)
+        if clean_word:  # Accept any non-empty word including single letters and numbers
+            # Properly capitalize hyphenated names like "Jean-Pierre"
+            if '-' in clean_word:
+                parts = clean_word.split('-')
+                clean_word = '-'.join([part.capitalize() for part in parts])
+            else:
+                clean_word = clean_word.capitalize()
+            clean_words.append(clean_word)
 
     if clean_words:
         return " ".join(clean_words)
+
+    # Special case: if input is a single character or number, return it
+    cleaned_single = re.sub(r"[^a-zA-Z0-9]", "", text)
+    if cleaned_single:
+        return cleaned_single.upper()
 
     # If nothing meaningful extracted, return empty
     return ""
@@ -100,33 +111,133 @@ def extract_phone_simple(speech: str) -> Optional[str]:
     if not speech or not speech.strip():
         return None
 
-    # Remove common words
-    text = speech.lower()
-    text = re.sub(r'\b(my|number|is|phone|mobile|cell)\b', '', text)
+    original_speech = speech
+    logger.debug(f"[phone_simple] processing: '{speech}'")
 
-    # Extract all digits
+    # Enhanced preprocessing for speech artifacts
+    text = speech.lower()
+
+    # Handle speech artifacts and patterns
+    speech_patterns = [
+        # Remove common prefixes
+        (r'\b(my|number|is|phone|mobile|cell|it\'s|its|the)\b', ''),
+        # Handle spelled out numbers
+        (r'\bzero\b', '0'),
+        (r'\bone\b', '1'),
+        (r'\btwo\b', '2'),
+        (r'\bthree\b', '3'),
+        (r'\bfour\b', '4'),
+        (r'\bfive\b', '5'),
+        (r'\bsix\b', '6'),
+        (r'\bseven\b', '7'),
+        (r'\beight\b', '8'),
+        (r'\bnine\b', '9'),
+        # Handle speech artifacts
+        (r'\boh\b', '0'),
+        (r'\bdouble\s+(\w+)', r'\1\1'),  # "double five" -> "55"
+        (r'\btriple\s+(\w+)', r'\1\1\1'),  # "triple six" -> "666"
+    ]
+
+    for pattern, replacement in speech_patterns:
+        text = re.sub(pattern, replacement, text)
+
+    # Clean up extra spaces
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    if text != speech.lower():
+        logger.debug(f"[phone_simple] preprocessed: '{speech}' -> '{text}'")
+
+    # Method 1: Extract phone-like patterns and try phonenumbers library
+    phone_patterns = [
+        r'(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})',  # 416-555-1234, 416.555.1234, 416 555 1234
+        r'(\d{1}[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4})',  # 1-416-555-1234
+        r'(\d{10,11})',  # 4165551234 or 14165551234
+    ]
+
+    for pattern in phone_patterns:
+        match = re.search(pattern, text)
+        if match:
+            phone_candidate = match.group(1)
+            try:
+                parsed = phonenumbers.parse(phone_candidate, "CA")
+                if phonenumbers.is_valid_number(parsed) or phonenumbers.is_possible_number(parsed):
+                    result = phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
+                    logger.debug(f"[phone_simple] phonenumbers pattern success: '{phone_candidate}' -> {result}")
+                    return result
+            except Exception as e:
+                logger.debug(f"[phone_simple] phonenumbers pattern parsing failed for '{phone_candidate}': {e}")
+
+    # Method 1b: Try phonenumbers library on full input as fallback
+    try:
+        parsed = phonenumbers.parse(speech, "CA")
+        if phonenumbers.is_valid_number(parsed) or phonenumbers.is_possible_number(parsed):
+            result = phonenumbers.format_number(parsed, PhoneNumberFormat.E164)
+            logger.debug(f"[phone_simple] phonenumbers success: '{original_speech}' -> {result}")
+            return result
+    except Exception as e:
+        logger.debug(f"[phone_simple] phonenumbers parsing failed: {e}")
+
+    # Method 2: Extract all digits (most reliable for speech)
     digits = re.findall(r'\d', text)
+
+    logger.debug(f"[phone_simple] extracted digits: {digits} (count: {len(digits)})")
 
     if len(digits) == 10:
         # Canadian/US number without country code
         phone = "".join(digits)
-        return f"+1{phone}"
+        result = f"+1{phone}"
+        logger.debug(f"[phone_simple] 10-digit success: '{original_speech}' -> {result}")
+        return result
     elif len(digits) == 11 and digits[0] == '1':
         # Number with country code
         phone = "".join(digits)
-        return f"+{phone}"
+        result = f"+{phone}"
+        logger.debug(f"[phone_simple] 11-digit success: '{original_speech}' -> {result}")
+        return result
 
-    # Try phonenumbers library as fallback for formatted numbers
-    try:
-        parsed = phonenumbers.parse(speech, "CA")
-        if phonenumbers.is_valid_number(parsed):
-            return phonenumbers.format_number(
-                parsed,
-                PhoneNumberFormat.E164
-            )
-    except Exception as e:
-        logger.debug(f"Phone parsing failed: {e}")
+    # Method 3: Pattern matching for common spoken formats
+    patterns = [
+        # "four one six five five five one two three four"
+        r'(\w+)\s+(\w+)\s+(\w+)\s+(\w+)\s+(\w+)\s+(\w+)\s+(\w+)\s+(\w+)\s+(\w+)\s+(\w+)',
+        # "416 555 1234" or "four one six five five five one two three four"
+        r'(\d{3}|\w+)\s+(\d{3}|\w+)\s+(\d{4}|\w+\s+\w+\s+\w+\s+\w+)',
+        # "4165551234" in words
+        r'(\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+)',
+    ]
 
+    word_to_digit = {
+        'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
+        'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
+        'oh': '0'
+    }
+
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            # Convert words to digits
+            digits_from_words = []
+            for group in match.groups():
+                if group:
+                    words = group.split()
+                    for word in words:
+                        word_clean = word.strip().lower()
+                        if word_clean in word_to_digit:
+                            digits_from_words.append(word_to_digit[word_clean])
+                        elif word_clean.isdigit():
+                            digits_from_words.extend(list(word_clean))
+
+            if len(digits_from_words) == 10:
+                phone = "".join(digits_from_words)
+                result = f"+1{phone}"
+                logger.debug(f"[phone_simple] pattern success: '{original_speech}' -> {result}")
+                return result
+            elif len(digits_from_words) == 11 and digits_from_words[0] == '1':
+                phone = "".join(digits_from_words)
+                result = f"+{phone}"
+                logger.debug(f"[phone_simple] pattern success: '{original_speech}' -> {result}")
+                return result
+
+    logger.debug(f"[phone_simple] all methods failed for: '{original_speech}'")
     return None
 
 def extract_key_phrases(speech: str, context: str) -> str:
