@@ -1,0 +1,18 @@
+# Terraform variables for Bella Voice App
+# Copy this file to terraform.tfvars and fill in your actual values
+
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "production"
+
+# API Keys (sensitive - store these securely)
+openai_api_key    = "sk-..." # Your OpenAI API key
+bella_api_key     = "your-bella-api-key-here"
+
+# Twilio Configuration
+twilio_auth_token    = "your-twilio-auth-token"
+twilio_account_sid   = "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+twilio_phone_number  = "+15551234567"
+
+# Example values - replace with your actual credentials
+# Never commit the actual terraform.tfvars file to version control!

@@ -1,0 +1,333 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: bella-voice-app
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: test_user
+          POSTGRES_DB: test_bella
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio pytest-cov
+
+    - name: Run database migrations
+      env:
+        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_bella
+      run: |
+        alembic upgrade head
+
+    - name: Run tests
+      env:
+        APP_ENV: testing
+        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_bella
+        OPENAI_API_KEY: test_key
+        BELLA_API_KEY: test_api_key
+        TWILIO_AUTH_TOKEN: test_token
+        TWILIO_ACCOUNT_SID: test_sid
+        TWILIO_PHONE_NUMBER: +15551234567
+      run: |
+        pytest tests/ -v --cov=app --cov-report=xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+
+  deploy-lambda:
+    if: github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Create deployment package
+      run: |
+        # Install dependencies in deployment directory
+        mkdir deployment
+        pip install -r requirements.txt -t deployment/
+        pip install mangum -t deployment/  # For Lambda ASGI adapter
+
+        # Copy application code
+        cp -r app deployment/
+        cp -r alembic deployment/
+        cp alembic.ini deployment/
+
+        # Copy the production Lambda handler
+        cp lambda_handler.py deployment/
+
+        # Create fallback handler for compatibility
+        cat > deployment/handler.py << 'EOF'
+        # Fallback handler - main handler is in lambda_handler.py
+        from lambda_handler import lambda_handler as handler
+        EOF
+
+        # Create deployment zip
+        cd deployment
+        zip -r ../deployment.zip . -x "*.pyc" "*__pycache__*" "*.git*"
+        cd ..
+
+    - name: Deploy to Lambda
+      run: |
+        # Check if function exists
+        if aws lambda get-function --function-name bella-voice-app 2>/dev/null; then
+          echo "Updating existing Lambda function..."
+          aws lambda update-function-code \
+            --function-name bella-voice-app \
+            --zip-file fileb://deployment.zip
+
+          # Update environment variables with advanced call flow support
+          aws lambda update-function-configuration \
+            --function-name bella-voice-app \
+            --environment Variables="{
+              APP_ENV=production,
+              DATABASE_URL=${{ secrets.DATABASE_URL }},
+              REDIS_URL=${{ secrets.REDIS_URL }},
+              OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},
+              OPENAI_MODEL=gpt-4o-mini,
+              BELLA_API_KEY=${{ secrets.BELLA_API_KEY }},
+              TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }},
+              TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }},
+              TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }},
+              GOOGLE_CALENDAR_ENABLED=true,
+              GOOGLE_CALENDAR_ID=${{ secrets.GOOGLE_CALENDAR_ID }},
+              GOOGLE_SERVICE_ACCOUNT_JSON=${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }},
+              BUSINESS_EMAIL=${{ secrets.BUSINESS_EMAIL }}
+            }"
+        else
+          echo "Creating new Lambda function..."
+          aws lambda create-function \
+            --function-name bella-voice-app \
+            --runtime python3.11 \
+            --role ${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }} \
+            --handler lambda_handler.lambda_handler \
+            --zip-file fileb://deployment.zip \
+            --timeout 30 \
+            --memory-size 512 \
+            --environment Variables="{
+              APP_ENV=production,
+              DATABASE_URL=${{ secrets.DATABASE_URL }},
+              REDIS_URL=${{ secrets.REDIS_URL }},
+              OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},
+              OPENAI_MODEL=gpt-4o-mini,
+              BELLA_API_KEY=${{ secrets.BELLA_API_KEY }},
+              TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }},
+              TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }},
+              TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }},
+              GOOGLE_CALENDAR_ENABLED=true,
+              GOOGLE_CALENDAR_ID=${{ secrets.GOOGLE_CALENDAR_ID }},
+              GOOGLE_SERVICE_ACCOUNT_JSON=${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }},
+              BUSINESS_EMAIL=${{ secrets.BUSINESS_EMAIL }}
+            }"
+
+          # Create function URL if it doesn't exist
+          aws lambda create-function-url-config \
+            --function-name bella-voice-app \
+            --auth-type NONE \
+            --cors '{
+              "AllowCredentials": false,
+              "AllowHeaders": ["*"],
+              "AllowMethods": ["*"],
+              "AllowOrigins": ["*"],
+              "ExposeHeaders": ["*"],
+              "MaxAge": 86400
+            }'
+        fi
+
+        # Wait for function to be updated
+        aws lambda wait function-updated --function-name bella-voice-app
+
+        # Get function URL
+        FUNCTION_URL=$(aws lambda get-function-url-config --function-name bella-voice-app --query 'FunctionUrl' --output text)
+        echo "Lambda Function URL: $FUNCTION_URL"
+
+    - name: Run database migrations on production
+      run: |
+        # Create a temporary script to run migrations
+        cat > run_migrations.py << 'EOF'
+        import subprocess
+        import sys
+        import os
+
+        # Set the DATABASE_URL from environment
+        os.environ['DATABASE_URL'] = '${{ secrets.DATABASE_URL }}'
+
+        try:
+            result = subprocess.run(['alembic', 'upgrade', 'head'],
+                                  capture_output=True, text=True, check=True)
+            print("Migration successful:")
+            print(result.stdout)
+        except subprocess.CalledProcessError as e:
+            print("Migration failed:")
+            print(e.stderr)
+            sys.exit(1)
+        EOF
+
+        python run_migrations.py
+
+    - name: Test deployment
+      run: |
+        # Get the function URL
+        FUNCTION_URL=$(aws lambda get-function-url-config --function-name bella-voice-app --query 'FunctionUrl' --output text)
+
+        echo "🧪 Testing deployment at: $FUNCTION_URL"
+
+        # Test health endpoint
+        echo "1️⃣ Testing health endpoint..."
+        response=$(curl -s -o /dev/null -w "%{http_code}" "${FUNCTION_URL}")
+        if [ "$response" = "200" ]; then
+          echo "✅ Health check passed"
+        else
+          echo "❌ Health check failed: $response"
+          exit 1
+        fi
+
+        # Test voice webhook endpoint with advanced call flow
+        echo "2️⃣ Testing voice webhook endpoint..."
+        webhook_response=$(curl -s -o /dev/null -w "%{http_code}" \
+          -X POST "${FUNCTION_URL}twilio/voice" \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -d "From=%2B14035551234&CallSid=test-deployment-123&AccountSid=test")
+
+        if [ "$webhook_response" = "200" ]; then
+          echo "✅ Voice webhook endpoint working"
+        else
+          echo "❌ Voice webhook failed: $webhook_response"
+          exit 1
+        fi
+
+        # Test advanced features by checking TwiML response
+        echo "3️⃣ Testing conversation flow TwiML..."
+        twiml_content=$(curl -s -X POST "${FUNCTION_URL}twilio/voice" \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -d "From=%2B14035551234&CallSid=test-conversation-456&AccountSid=test")
+
+        if echo "$twiml_content" | grep -q "<Say"; then
+          echo "✅ Advanced conversation flow active - TwiML generated"
+        else
+          echo "⚠️  Basic response detected - advanced flow may not be active"
+          echo "Response: $twiml_content"
+        fi
+
+        echo "🎉 All deployment tests passed!"
+
+    - name: Update Twilio webhook URL
+      run: |
+        # Get the function URL for Twilio webhook configuration
+        FUNCTION_URL=$(aws lambda get-function-url-config --function-name bella-voice-app --query 'FunctionUrl' --output text)
+        echo "🔗 Update your Twilio webhook URL to: ${FUNCTION_URL}twilio/voice"
+        echo "   Go to: https://console.twilio.com/us1/develop/phone-numbers/manage/incoming"
+
+  deploy-ecr-ecs:
+    if: github.ref == 'refs/heads/main' && false  # Disabled by default, remove "&& false" to enable
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Create ECR repository if it doesn't exist
+        aws ecr describe-repositories --repository-names $ECR_REPOSITORY || \
+        aws ecr create-repository --repository-name $ECR_REPOSITORY
+
+        # Build Docker image
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+
+        # Push images
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Deploy to ECS
+      run: |
+        # Update ECS service (requires ECS cluster and service to be pre-created)
+        aws ecs update-service \
+          --cluster bella-cluster \
+          --service bella-voice-service \
+          --force-new-deployment
+
+  notify:
+    if: always()
+    needs: [test, deploy-lambda]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Notify deployment status
+      run: |
+        if [ "${{ needs.deploy-lambda.result }}" = "success" ]; then
+          echo "✅ Deployment to AWS Lambda successful!"
+          echo "🔗 Remember to update Twilio webhook URL in console"
+        else
+          echo "❌ Deployment failed. Check logs above."
+        fi

@@ -1,0 +1,90 @@
+# Pre-commit hooks for fast validation and code quality
+# Runs automated checks before each commit to catch issues early
+
+repos:
+  # Local hooks for project-specific validation
+  - repo: local
+    hooks:
+      # Smoke tests - ultra-fast validation
+      - id: smoke-tests
+        name: Run smoke tests
+        entry: ./scripts/smoke-tests.sh
+        language: script
+        pass_filenames: false
+        stages: [commit]
+        verbose: true
+
+      # Test changed files - smart test selection
+      - id: test-changed-files
+        name: Test changed files
+        entry: ./scripts/test-changed-files.sh
+        language: script
+        pass_filenames: false
+        stages: [commit]
+        verbose: true
+
+      # Python syntax check
+      - id: python-syntax-check
+        name: Check Python syntax
+        entry: python -m py_compile
+        language: python
+        files: \.py$
+        stages: [commit]
+
+  # Standard code quality hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      # Basic file checks
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=10240]  # 10MB limit
+
+      # Python-specific checks
+      - id: check-ast
+      - id: debug-statements
+      - id: requirements-txt-fixer
+
+  # Python code formatting
+  - repo: https://github.com/psf/black
+    rev: 23.3.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: [--line-length=100, --skip-string-normalization]
+
+  # Import sorting
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=100]
+
+  # Python linting (fast checks only)
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        args:
+          - --max-line-length=100
+          - --ignore=E203,W503,E501  # Compatible with black
+          - --select=E9,F63,F7,F82   # Only critical errors for speed
+        exclude: ^(alembic/|tests/mocks/)
+
+# Configuration for pre-commit
+default_stages: [commit]
+default_language_version:
+  python: python3
+
+# CI-specific configuration
+ci:
+  autofix_commit_msg: 🎨 [pre-commit.ci] Auto-fix code style issues
+  autofix_prs: true
+  autoupdate_commit_msg: ⬆️ [pre-commit.ci] Pre-commit autoupdate
+  autoupdate_schedule: weekly
+  skip: [smoke-tests, test-changed-files]  # Skip project-specific hooks in CI
