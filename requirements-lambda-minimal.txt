@@ -1,0 +1,40 @@
+# Lambda-optimized minimal requirements (production only)
+# Core FastAPI with ASGI adapter
+fastapi==0.116.1
+starlette==0.47.2
+mangum==0.17.0
+
+# Essential HTTP and validation
+httpx==0.28.1
+httpcore==1.0.9
+pydantic==2.11.7
+pydantic-settings==2.10.1
+python-multipart==0.0.20
+
+# Database (minimal footprint)
+sqlalchemy==2.0.43
+asyncpg==0.30.0
+alembic==1.16.4
+
+# Voice & Communication
+twilio==9.8.0
+phonenumbers==8.13.50
+
+# Time processing
+parsedatetime==2.6
+python-dateutil==2.8.2
+
+# Configuration
+python-dotenv==1.1.1
+itsdangerous==2.2.0
+
+# Cache
+redis==5.0.1
+
+# Google Calendar (minimal)
+google-api-python-client==2.100.0
+google-auth==2.41.1
+google-auth-httplib2==0.1.0
+
+# Logging
+structlog==23.2.0

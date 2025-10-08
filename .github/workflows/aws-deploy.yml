@@ -101,8 +101,9 @@ jobs:
         # Clean and create deployment directory
         rm -rf deployment
         mkdir deployment
-        pip install -r requirements.txt -t deployment/
-        pip install mangum -t deployment/  # For Lambda ASGI adapter
+
+        # Install minimal Lambda dependencies
+        pip install -r requirements-lambda-minimal.txt -t deployment/
 
         # Copy application code
         cp -r app deployment/
@@ -118,10 +119,29 @@ jobs:
         from lambda_handler import lambda_handler as handler
         EOF
 
-        # Create deployment zip
+        # Optimize package size - remove unnecessary files
         cd deployment
-        zip -r ../deployment.zip . -x "*.pyc" "*__pycache__*" "*.git*"
+        find . -type f -name "*.pyc" -delete
+        find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+        find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+        find . -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+        find . -type f -name "*.md" -delete 2>/dev/null || true
+        find . -type f -name "*.txt" -not -name "alembic.ini" -delete 2>/dev/null || true
+
+        # Create optimized deployment zip
+        zip -r ../deployment.zip . -x "*.pyc" "*__pycache__*" "*.git*" "*test*" "*/tests/*"
         cd ..
+
+        # Check package size (70MB = 73,400,320 bytes limit)
+        PACKAGE_SIZE=$(stat -f%z deployment.zip 2>/dev/null || stat -c%s deployment.zip)
+        LIMIT=70000000
+        echo "Package size: ${PACKAGE_SIZE} bytes (limit: ${LIMIT} bytes)"
+        if [ $PACKAGE_SIZE -gt $LIMIT ]; then
+          echo "❌ Package too large: ${PACKAGE_SIZE} bytes > ${LIMIT} bytes"
+          exit 1
+        else
+          echo "✅ Package size OK: ${PACKAGE_SIZE} bytes"
+        fi
 
     - name: Deploy to Lambda
       run: |
