@@ -147,3 +147,38 @@ terraform.tfvars
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+
+# ---- CRITICAL: Lambda Environment Files (NEVER COMMIT) ----
+# These files contain production API keys and must never be committed
+lambda-env.json
+lambda-env-update.json
+lambda-*.json
+*-env.json
+*-environment.json
+
+# ---- API Keys and Secrets Patterns ----
+# OpenAI API keys
+sk-*
+sk_*
+
+# Twilio credentials
+twilio-*.json
+*twilio*.env
+
+# Google Service Account Keys
+*service-account*.json
+*-key.json
+*serviceaccount*.json
+
+# Any file with 'secret', 'key', 'token', 'credential' in name
+*secret*.json
+*secrets*.json
+*key*.json
+*keys*.json
+*token*.json
+*credential*.json
+*credentials*.json
+
+# Database connection strings
+*database*.json
+*db*.json
