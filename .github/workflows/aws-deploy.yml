@@ -98,7 +98,8 @@ jobs:
 
     - name: Create deployment package
       run: |
-        # Install dependencies in deployment directory
+        # Clean and create deployment directory
+        rm -rf deployment
         mkdir deployment
         pip install -r requirements.txt -t deployment/
         pip install mangum -t deployment/  # For Lambda ASGI adapter
