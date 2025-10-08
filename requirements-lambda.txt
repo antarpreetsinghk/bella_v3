@@ -1,6 +1,6 @@
 # Core FastAPI and ASGI
 fastapi==0.116.1
-starlette==0.41.3
+starlette==0.47.2
 uvicorn[standard]==0.35.0
 mangum==0.19.0
 
