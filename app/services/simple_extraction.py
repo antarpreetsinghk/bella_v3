@@ -21,6 +21,11 @@ def extract_name_simple(speech: str) -> str:
         return ""
 
     text = speech.strip()
+
+    # Handle speech hesitation patterns before processing
+    text = re.sub(r'\.{2,}', ' ', text)  # Replace ellipsis with spaces
+    text = re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
+
     text_lower = text.lower()
 
     # Enhanced patterns for name introduction - using regex to find anywhere in text
@@ -76,6 +81,10 @@ def _clean_and_format_name(text: str) -> str:
     text = re.sub(r'^[.,;:!?\s]+', '', text)  # Remove leading punctuation
     text = re.sub(r'[.,;:!?\s]+$', '', text)  # Remove trailing punctuation
 
+    # Handle speech hesitation patterns (ellipsis, multiple dots, etc.)
+    text = re.sub(r'\.{2,}', ' ', text)  # Replace multiple dots with space
+    text = re.sub(r'\s+', ' ', text)     # Normalize whitespace
+
     # Split into words and clean each word
     words = text.split()
     clean_words = []
@@ -84,10 +93,13 @@ def _clean_and_format_name(text: str) -> str:
         # Remove non-alphabetic characters except apostrophes and hyphens (preserve Unicode letters)
         clean_word = re.sub(r"[^\w'\-]", "", word, flags=re.UNICODE)
         if clean_word:  # Accept any non-empty word including single letters and numbers
-            # Properly capitalize hyphenated names like "Jean-Pierre"
+            # Properly capitalize hyphenated names like "Jean-Pierre" and apostrophe names like "O'Connor"
             if '-' in clean_word:
                 parts = clean_word.split('-')
                 clean_word = '-'.join([part.capitalize() for part in parts])
+            elif "'" in clean_word:
+                parts = clean_word.split("'")
+                clean_word = "'".join([part.capitalize() for part in parts])
             else:
                 clean_word = clean_word.capitalize()
             clean_words.append(clean_word)

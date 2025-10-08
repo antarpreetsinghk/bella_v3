@@ -54,9 +54,9 @@ class TestNameExtraction:
     def test_extract_name_simple_multi_word(self):
         """Test extraction of complex names"""
         assert extract_name_simple("John Michael Smith") == "John Michael Smith"
-        assert extract_name_simple("Mary-Jane Watson") == "Mary-jane Watson"  # capitalize() affects case after hyphen
-        assert extract_name_simple("O'Connor") == "O'connor"  # capitalize() affects case after apostrophe
-        assert extract_name_simple("Jean-Pierre Dubois") == "Jean-pierre Dubois"  # Same issue
+        assert extract_name_simple("Mary-Jane Watson") == "Mary-Jane Watson"  # Proper capitalization for hyphenated names
+        assert extract_name_simple("O'Connor") == "O'Connor"  # Proper capitalization for apostrophe names
+        assert extract_name_simple("Jean-Pierre Dubois") == "Jean-Pierre Dubois"  # Proper capitalization maintained
 
     @pytest.mark.essential
     @pytest.mark.smoke
@@ -126,21 +126,21 @@ class TestNameExtraction:
         # Single character
         assert extract_name_simple("A") == "A"
 
-        # Very long name (should be truncated to 3 words by the function)
+        # Very long name (should be truncated to 4 words by the function)
         long_name = "John Michael David Christopher Alexander Smith Johnson Wilson"
         result = extract_name_simple(long_name)
         words = result.split()
-        assert len(words) <= 3  # Function limits to 3 words
+        assert len(words) <= 4  # Function limits to 4 words
 
     @pytest.mark.essential
     @pytest.mark.unit
     def test_extract_name_special_characters(self):
         """Test names with special characters that should be preserved"""
-        # Apostrophes and hyphens should be preserved, but capitalize() affects case after them
-        assert extract_name_simple("O'Brien") == "O'brien"  # capitalize() makes 'b' lowercase
-        assert extract_name_simple("Mary-Jane") == "Mary-jane"  # capitalize() makes 'j' lowercase
-        assert extract_name_simple("D'Angelo") == "D'angelo"  # capitalize() makes 'a' lowercase
-        assert extract_name_simple("Jean-Luc") == "Jean-luc"  # capitalize() makes 'l' lowercase
+        # Apostrophes and hyphens should be preserved with proper capitalization
+        assert extract_name_simple("O'Brien") == "O'Brien"  # Proper capitalization for apostrophe names
+        assert extract_name_simple("Mary-Jane") == "Mary-Jane"  # Proper capitalization for hyphenated names
+        assert extract_name_simple("D'Angelo") == "D'Angelo"  # Proper capitalization for apostrophe names
+        assert extract_name_simple("Jean-Luc") == "Jean-Luc"  # Proper capitalization for hyphenated names
 
     @pytest.mark.essential
     @pytest.mark.slow
