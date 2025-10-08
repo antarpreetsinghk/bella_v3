@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 
 # Test configuration
-FUNCTION_URL = "https://bhcnf2i6eh3bxnr6lrnt4ubouy0obfjy.lambda-url.us-east-1.on.aws"
+FUNCTION_URL = "https://totw7mm2ox6nqyicgtu5dujxrq0uhgki.lambda-url.ca-central-1.on.aws"
 TIMEOUT = 30
 
 
