@@ -1,0 +1,160 @@
+{
+  "timestamp": 1759985207.2722263,
+  "test_type": "accent_simulation",
+  "summary": {
+    "total_tests": 7,
+    "successful_tests": 7,
+    "timeout_protected": 7,
+    "success_rate": 100.0,
+    "timeout_protection_rate": 100.0
+  },
+  "detailed_results": [
+    {
+      "test_name": "Standard Canadian Name",
+      "accent_type": "canadian",
+      "success": true,
+      "max_response_time": 0.13383007049560547,
+      "timeout_protected": true,
+      "name_step": {
+        "success": true,
+        "response_time": 0.13383007049560547,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      },
+      "time_step": {
+        "success": true,
+        "response_time": 0.06899142265319824,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      }
+    },
+    {
+      "test_name": "Filipino Accent Simulation",
+      "accent_type": "filipino",
+      "success": true,
+      "max_response_time": 0.06715011596679688,
+      "timeout_protected": true,
+      "name_step": {
+        "success": true,
+        "response_time": 0.06284379959106445,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      },
+      "time_step": {
+        "success": true,
+        "response_time": 0.06715011596679688,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      }
+    },
+    {
+      "test_name": "Chinese Accent Simulation",
+      "accent_type": "chinese",
+      "success": true,
+      "max_response_time": 0.135345458984375,
+      "timeout_protected": true,
+      "name_step": {
+        "success": true,
+        "response_time": 0.135345458984375,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      },
+      "time_step": {
+        "success": true,
+        "response_time": 0.10273432731628418,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      }
+    },
+    {
+      "test_name": "Ukrainian Accent Simulation",
+      "accent_type": "ukrainian",
+      "success": true,
+      "max_response_time": 0.10835742950439453,
+      "timeout_protected": true,
+      "name_step": {
+        "success": true,
+        "response_time": 0.10835742950439453,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      },
+      "time_step": {
+        "success": true,
+        "response_time": 0.10828113555908203,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      }
+    },
+    {
+      "test_name": "German Accent Simulation",
+      "accent_type": "german",
+      "success": true,
+      "max_response_time": 0.10934281349182129,
+      "timeout_protected": true,
+      "name_step": {
+        "success": true,
+        "response_time": 0.10934281349182129,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      },
+      "time_step": {
+        "success": true,
+        "response_time": 0.10583877563476562,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      }
+    },
+    {
+      "test_name": "Unclear Speech Test",
+      "accent_type": "unclear",
+      "success": true,
+      "max_response_time": 0.11345648765563965,
+      "timeout_protected": true,
+      "name_step": {
+        "success": true,
+        "response_time": 0.11345648765563965,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      },
+      "time_step": {
+        "success": true,
+        "response_time": 0.10247635841369629,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      }
+    },
+    {
+      "test_name": "Long Complex Name",
+      "accent_type": "complex",
+      "success": true,
+      "max_response_time": 0.1143953800201416,
+      "timeout_protected": true,
+      "name_step": {
+        "success": true,
+        "response_time": 0.1143953800201416,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      },
+      "time_step": {
+        "success": true,
+        "response_time": 0.101959228515625,
+        "status_code": 403,
+        "response_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Reject/></Response>",
+        "has_twiml": true
+      }
+    }
+  ]
+}

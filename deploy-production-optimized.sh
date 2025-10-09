@@ -131,7 +131,7 @@ echo "🚀 Updating Lambda function..."
 aws lambda update-function-code \
     --function-name bella-voice-app \
     --zip-file fileb://lambda-optimized.zip \
-    --region us-east-1
+    --region ca-central-1
 
 echo "⚙️ Updating Lambda configuration..."
 aws lambda update-function-configuration \
@@ -139,13 +139,13 @@ aws lambda update-function-configuration \
     --handler lambda_handler.lambda_handler \
     --timeout 30 \
     --memory-size 512 \
-    --region us-east-1
+    --region ca-central-1
 
 echo "🔧 Updating environment variables..."
 aws lambda update-function-configuration \
     --function-name bella-voice-app \
     --environment file://lambda-env-update.json \
-    --region us-east-1
+    --region ca-central-1
 
 echo "✅ Optimized Lambda deployed successfully!"
 echo "🧪 Testing the deployment..."

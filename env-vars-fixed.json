@@ -1,0 +1,30 @@
+{
+    "Variables": {
+        "RESPONSE_MAX_TOKENS": "512",
+        "PRODUCTION_BASE_URL": "https://bella-alb-1924818779.ca-central-1.elb.amazonaws.com",
+        "APP_ENV": "production",
+        "POSTGRES_HOST": "bella-db.cvc86oiqsam9.ca-central-1.rds.amazonaws.com",
+        "TZ": "America/Toronto",
+        "CSRF_SECRET": "kam1234",
+        "ADMIN_PASS": "kam1234",
+        "GOOGLE_CALENDAR_ENABLED": "true",
+        "DATABASE_URL": "postgresql+asyncpg://postgres:BellaPostgres2025@bella-db.cvc86oiqsam9.ca-central-1.rds.amazonaws.com:5432/postgres",
+        "REQUEST_MAX_TOKENS": "4000",
+        "POSTGRES_USER": "postgres",
+        "TWILIO_WEBHOOK_URL": "https://totw7mm2ox6nqyicgtu5dujxrq0uhgki.lambda-url.ca-central-1.on.aws/twilio/voice",
+        "POSTGRES_PASSWORD": "BellaPostgres2025",
+        "POSTGRES_PORT": "5432",
+        "ADMIN_USER": "antar",
+        "POSTGRES_DB": "postgres",
+        "BELLA_API_KEY": "kam1234",
+        "TWILIO_PHONE_NUMBER": "+14382565719",
+        "GOOGLE_CALENDAR_ID": "9eed74c0f7616d1f8e1182f478d78b673df9f1575acfd965f4925a3f5fd5b0e5@group.calendar.google.com",
+        "BUSINESS_EMAIL": "bella-calendar@bella-voice-booking.iam.gserviceaccount.com",
+        "GOOGLE_SERVICE_ACCOUNT_JSON": "{\"type\":\"service_account\",\"project_id\":\"bella-voice-booking\",\"private_key_id\":\"31e45b2f238ba3aabc83c7679d501b6b4abe6537\",\"private_key\":\"-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDCv9ChzvMvwSPb\\noqvhdCIEmwUAbD3JdvSmVY0BAPqGFvdQjiWQfSfC1+/dSZoNsGDp8OB0rAz1KZyX\\n0BDjkhqTiI61PRPC8e6PoOSwtcRmzOjSs8tqH43GtCgoZUiF6RSHXaPufNkryggH\\nSe9RcGH/b0MPzbEw0ZivnYEZX2sJHdPzAF0yQ5qMkFCVV8p7TFFbYMlrLOoZCNcN\\nE6Z977iPmxe5gbEY5aWzvdG5ktVX2lQ6fkyITTAfFGhJm4UlC1judqrZ7gQDkclz\\n4XpdgYR8PJtZKLQkMesGoWZ9xCZSMfy3fhOVu7aBR44mXTJMws2kbGR+1t3TEk1L\\nzGym+lGbAgMBAAECggEACdsUlJEZSY9oCyjTs1iMkthti7SZTpAl7Xe4PRbEQZ5O\\nlysPx5zYiEnOqnpGa5mY2KiyE0rUamEtZZlytrGhhVnh2auPoSFb8LTfHfpKSDw9\\nLtHz4hkFXyBQRUsVkoFV4qE14fnmMQshFjgC/odwzjEz9Ewf7YKN9u/s+qW+Ovsg\\nMeEgScr91Xxz3Dnu3vgeJ0yVJpjMKRreL4GR8+omjRJBsto5fEt5w9V16sVQ1BGZ\\n8fL2jdD/96n4J8XscMcz4kL0wv5w4adwbkVgizlDHyS4AcO0Anhm5CoRsHVIPIo+\\nt6/cRSFgZ1D2F3VoT898oA2HjZUoSelR7m/svWNd4QKBgQDfU/fQUmWYVr6NX7N+\\n4LuSDtJb4MXFTZrvwAzfppf3nx8BBqbbibkduJmoZIUFoUWrtnIz7aQ5o/rV/hiG\\nRWZgq01B+/B7GfDP0l/MsTDRQQI0Z48aEWzR3cLYOcG1a4A42t0ydXGP5Z7ghUyG\\n3GwYt1mRHd4MlGWL8x47bHwYEwKBgQDfPYXV+c5KoA57KxvmeNYGaBSlLYbIb7Ra\\nEr6FYDYQjWsmuBwBJ6utcZqv0t/xQmiO7L6C2s9rCCYxRDLcME42kShaXCx5Nfd3\\n4MMsDqpCtuRuXiVTaLkoc0EBO2SENht21eT18Pnp1cByHLRFJpCC15qZtlYRYYqm\\ntdRIYsahWQKBgQC+n+mzQ+G8Oq7D9aA8+I6iiUw9aIrncuqBIqjablTg5E2OjqL2\\nWYRNPjjKZ6Kzv4i8nSq18G5xVOrSpeVBFxPgB9gWLnqCWQ4YFjX3fndw5dB/8rVP\\nRvhf2q5p6kLSHESCQy7z1xNsBE+szZsYsiUCo94r5BaZHkHfR1HS3zK9SQKBgAkc\\npsDUIHJ1VAH9AXeHyRyb1PPlBtJZlN/0Ueh5w9srGouLCkGVz/EVaP3yOofLcR8c\\nVK5cpgi1XXG3WegY5KhfhmkhyALui/pNp0m+E38DnhFPMHDWHnCjO60EMpce6kIQ\\nevb67gh4XBGMUGNeLpnYmQvbIGo3NASX+WE2/uqJAoGAQwfPCePzgUX9q3M0EBOe\\n7s+bR6Bdk7TorPExgre010wB66sZd7I6KOiR5hegIerCK5f+DhL3kHvn63acAM2B\\nrACVZRMzUmiDN9AiLMC6qOb3loGBM+hAIIwklZdePHgkUy4Xro6KDQ2mwTaTAQXJ\\n2BIT+hQA4eryTMKhV1vLLmA=\\n-----END PRIVATE KEY-----\\n\",\"client_email\":\"bella-calendar@bella-voice-booking.iam.gserviceaccount.com\",\"client_id\":\"116705862742996483486\",\"auth_uri\":\"https://accounts.google.com/o/oauth2/auth\",\"token_uri\":\"https://oauth2.googleapis.com/token\",\"auth_provider_x509_cert_url\":\"https://www.googleapis.com/oauth2/v1/certs\",\"client_x509_cert_url\":\"https://www.googleapis.com/robot/v1/metadata/x509/bella-calendar%40bella-voice-booking.iam.gserviceaccount.com\",\"universe_domain\":\"googleapis.com\"}",
+        "OPENAI_API_KEY": "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",
+        "OPENAI_MODEL": "gpt-4o-mini",
+        "TWILIO_AUTH_TOKEN": "11be258d711c0741531b6d4cddc8b0ae",
+        "REDIS_URL": "redis://bella-redis.0dludc.0001.cac1.cache.amazonaws.com:6379",
+        "TWILIO_ACCOUNT_SID": "AC32c4cd1caa9e3c32d9c9d2e03b58f994"
+    }
+}

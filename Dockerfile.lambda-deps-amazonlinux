@@ -1,0 +1,30 @@
+# Use Amazon Linux 2 which matches Lambda runtime environment more closely
+FROM public.ecr.aws/lambda/python:3.11
+
+# Install development tools if needed
+RUN yum update -y && yum install -y \
+    gcc \
+    gcc-c++ \
+    make \
+    && yum clean all
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements file
+COPY requirements-lambda-minimal.txt .
+
+# Create target directory for packages
+RUN mkdir -p /lambda-packages
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    --target /lambda-packages \
+    -r requirements-lambda-minimal.txt
+
+# Remove unnecessary files
+RUN find /lambda-packages -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+RUN find /lambda-packages -name "*.pyc" -delete
+RUN find /lambda-packages -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+
+CMD ["echo", "Dependencies built with Amazon Linux"]

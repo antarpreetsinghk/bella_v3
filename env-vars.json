@@ -1,0 +1,15 @@
+{
+  "Variables": {
+    "APP_ENV": "production",
+    "DATABASE_URL": "sqlite+aiosqlite:////tmp/bella.db",
+    "OPENAI_API_KEY": "placeholder-openai-key",
+    "OPENAI_MODEL": "gpt-4o-mini",
+    "BELLA_API_KEY": "33333333333333333333333333",
+    "TWILIO_AUTH_TOKEN": "placeholder-twilio-token",
+    "TWILIO_ACCOUNT_SID": "ACtest123",
+    "TWILIO_PHONE_NUMBER": "+15559876543",
+    "GOOGLE_CALENDAR_ENABLED": "false",
+    "REDIS_URL": "",
+    "TWILIO_WEBHOOK_URL": "https://bhcnf2i6eh3bxnr6lrnt4ubouy0obfjy.lambda-url.us-east-1.on.aws/twilio/voice"
+  }
+}

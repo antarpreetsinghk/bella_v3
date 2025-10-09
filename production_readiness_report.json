@@ -1,0 +1,96 @@
+{
+  "timestamp": 1759985799.488307,
+  "overall_status": "READY",
+  "critical_issues": 0,
+  "categories": {
+    "health": {
+      "PASS": 3,
+      "WARN": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    },
+    "webhook": {
+      "PASS": 1,
+      "WARN": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    },
+    "accent": {
+      "PASS": 3,
+      "WARN": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    },
+    "timeout": {
+      "PASS": 2,
+      "WARN": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    }
+  },
+  "detailed_checks": [
+    {
+      "category": "health",
+      "check": "Basic health check",
+      "status": "PASS",
+      "response_time": 0.1811666488647461,
+      "details": "Status: 200, Time: 0.181s"
+    },
+    {
+      "category": "health",
+      "check": "Database readiness",
+      "status": "PASS",
+      "response_time": 0.10020780563354492,
+      "details": "Status: 200, Time: 0.100s"
+    },
+    {
+      "category": "health",
+      "check": "Version info",
+      "status": "PASS",
+      "response_time": 0.10458230972290039,
+      "details": "Status: 200, Time: 0.105s"
+    },
+    {
+      "category": "webhook",
+      "check": "Voice webhook security",
+      "status": "PASS",
+      "response_time": 0.20241379737854004,
+      "details": "Correctly rejected unsigned request in 0.202s"
+    },
+    {
+      "category": "accent",
+      "check": "Filipino accent recognition",
+      "status": "PASS",
+      "details": "Input: \"My name is Lobert Chen\" \u2192 \"Lobert Chen\""
+    },
+    {
+      "category": "accent",
+      "check": "European accent recognition",
+      "status": "PASS",
+      "details": "Input: \"My name is Villiam Klaus\" \u2192 \"Villiam Klaus\""
+    },
+    {
+      "category": "accent",
+      "check": "General accent recognition",
+      "status": "PASS",
+      "details": "Input: \"My name is Maria Domas\" \u2192 \"Maria Domas\""
+    },
+    {
+      "category": "timeout",
+      "check": "Timeout utilities available",
+      "status": "PASS",
+      "details": "Timeout protection functions loaded successfully"
+    },
+    {
+      "category": "timeout",
+      "check": "Quick fallback responses",
+      "status": "PASS",
+      "details": "Generated: \"I didn't catch your name clearly. Could you spell ...\""
+    }
+  ],
+  "summary": {
+    "total_checks": 9,
+    "pass_count": 9,
+    "production_ready": true
+  }
+}
