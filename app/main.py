@@ -522,17 +522,24 @@ async def lock_all(request, call_next):
                 ok = False
                 url_for_validation = received_url
 
-                for i, test_url in enumerate(possible_urls):
-                    test_result = RequestValidator(TWILIO_AUTH_TOKEN).validate(test_url, form, sig)
+                # Only attempt validation if signature is present
+                if sig:
+                    for i, test_url in enumerate(possible_urls):
+                        test_result = RequestValidator(TWILIO_AUTH_TOKEN).validate(test_url, form, sig)
 
-                    if test_result:
-                        ok = True
-                        url_for_validation = test_url
-                        logger.info("signature_validated", url=test_url, attempt=i+1)
-                        break
+                        if test_result:
+                            ok = True
+                            url_for_validation = test_url
+                            logger.info("signature_validated", url=test_url, attempt=i+1)
+                            break
+                else:
+                    # No signature provided - allow for testing
+                    logger.warning("twilio_request_unsigned",
+                                   reason="no_signature_header",
+                                   action="allowing_for_testing")
+                    ok = True
 
-                # Smart validation: if signature present but invalid, reject
-                # If no signature, allow (for testing and development)
+                # Log failure only if signature was provided but validation failed
                 if sig and not ok:
                     logger.error("signature_validation_failed",
                                  attempted_urls=possible_urls,
@@ -542,11 +549,6 @@ async def lock_all(request, call_next):
                     log_error(Exception("Twilio signature validation failed"),
                              {"endpoint": path, "attempts": len(possible_urls), "signature_length": len(sig)},
                              ErrorSeverity.MEDIUM)
-                elif not sig:
-                    logger.warning("twilio_request_unsigned",
-                                   reason="no_signature_header",
-                                   action="allowing_for_testing")
-                    ok = True  # Allow unsigned requests for testing
 
                 # Additional debug logging if webhook capture is enabled
                 if WEBHOOK_DEBUG_ENABLED:
