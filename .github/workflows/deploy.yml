@@ -95,7 +95,7 @@ jobs:
         echo "🔧 Testing SSH connectivity to ${{ env.EC2_HOST }}..."
 
         # Configure SSH client options for reliability
-        cat >> ~/.ssh/config << 'EOF'
+        cat >> ~/.ssh/config << EOF
 Host ${{ env.EC2_HOST }}
     ServerAliveInterval 30
     ServerAliveCountMax 3
@@ -196,7 +196,7 @@ EOF
              echo '🔍 Verifying port 8000 is free...'; \
              if netstat -tlnp | grep :8000; then \
                echo '⚠️ Port 8000 still in use, forcing cleanup...'; \
-               sudo kill -9 \$(sudo lsof -t -i:8000) || true; \
+               sudo kill -9 $(sudo lsof -t -i:8000) || true; \
                sleep 3; \
              fi; \
              echo '✅ Port cleanup completed successfully'"; then
@@ -336,7 +336,7 @@ EOF
              docker compose -f docker-compose.cost-optimized.yml ps && \
              echo '🔍 Testing health endpoints...' && \
              for i in {1..15}; do \
-               echo \"Health check iteration \$i/15...\"; \
+               echo \"Health check iteration $i/15...\"; \
                if curl -f -s --connect-timeout 10 --max-time 30 http://localhost:8000/healthz >/dev/null 2>&1; then \
                  echo '✅ Health endpoint responded successfully'; \
                  if curl -f -s --connect-timeout 10 --max-time 30 http://localhost:8000/readyz >/dev/null 2>&1; then \
@@ -348,7 +348,7 @@ EOF
                  echo '✅ Basic health check passed'; \
                  exit 0; \
                fi; \
-               echo \"Attempt \$i/15 failed, waiting 15s...\"; \
+               echo \"Attempt $i/15 failed, waiting 15s...\"; \
                sleep 15; \
              done; \
              echo '❌ Health check failed after 15 attempts (3.75 minutes)'; \
