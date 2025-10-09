@@ -3,6 +3,7 @@ fastapi==0.116.1
 starlette==0.47.2  # Security fix for CVE-2025-54121
 h11==0.16.0        # Security fix for CVE-2025-43859
 uvicorn[standard]==0.35.0
+python-multipart==0.0.16  # FastAPI form data support
 sqlalchemy==2.0.43
 asyncpg==0.30.0
 pydantic==2.11.7
@@ -25,6 +26,9 @@ boto3==1.34.0
 phonenumbers==8.13.50
 parsedatetime==2.6
 python-dateutil==2.8.2
+word2number==1.1          # Enhanced phone number parsing
+nameparser==1.1.3         # Enhanced name extraction
+rapidfuzz==3.10.1         # Fuzzy matching for names
 
 # Session Storage
 redis==5.0.1
@@ -44,14 +48,13 @@ pytest-benchmark==4.0.0  # Performance testing
 pytest-timeout==2.2.0  # Test timeout handling
 psutil==5.9.6  # Memory monitoring for performance tests
 
+# Security & Code Quality
+bandit==1.8.6             # Security scanning
+safety==3.6.2             # Dependency vulnerability scanning
+
 # OPTIONAL: Fallback only (budget $50/month max)
 # openai==1.3.7  # Uncomment only if Whisper fallback needed
 
 # REMOVED: Unused expensive packages
 # aiosqlite==0.20.0          # Not used in production
-# word2number==1.1           # Simple inline replacement
-# nameparser==1.1.3          # Over-engineered for simple names
-# fuzzywuzzy==0.18.0          # Unnecessary complexity
-# rapidfuzz>=3.8.0           # Duplicate functionality
-# safety==3.6.2              # Development only
-# bandit==1.8.6              # Development only
+# fuzzywuzzy==0.18.0          # Replaced with rapidfuzz for better performance
