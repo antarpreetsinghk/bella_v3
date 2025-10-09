@@ -6,7 +6,7 @@ echo "============================================"
 
 # Configuration
 FUNCTION_NAME="bella-voice-app"
-REGION="us-east-1"
+REGION="ca-central-1"
 
 echo "📦 Creating minimal deployment package..."
 
@@ -14,13 +14,9 @@ echo "📦 Creating minimal deployment package..."
 rm -rf lambda-deployment-minimal
 mkdir lambda-deployment-minimal
 
-# Install only essential dependencies
-echo "Installing minimal dependencies..."
-pip install -r requirements-lambda.txt -t lambda-deployment-minimal/ --no-deps --disable-pip-version-check
-
-# Install specific dependencies we need
-pip install aiosqlite==0.20.0 -t lambda-deployment-minimal/ --no-deps
-pip install anyio==3.7.1 -t lambda-deployment-minimal/ --no-deps
+# Install compatible dependencies
+echo "Installing compatible dependencies..."
+pip install -r requirements-lambda-compatible.txt -t lambda-deployment-minimal/ --no-deps --disable-pip-version-check
 
 # Copy application code
 echo "Copying application code..."
@@ -71,21 +67,23 @@ try:
 
 except ImportError as import_error:
     logger.error(f"Import error: {str(import_error)}")
+    import_error_msg = str(import_error)
 
     def lambda_handler(event, context):
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": f"Import error: {str(import_error)}"}),
+            "body": json.dumps({"error": f"Import error: {import_error_msg}"}),
             "headers": {"Content-Type": "application/json"}
         }
 
 except Exception as general_error:
     logger.error(f"General error during import: {str(general_error)}")
+    general_error_msg = str(general_error)
 
     def lambda_handler(event, context):
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": f"Startup error: {str(general_error)}"}),
+            "body": json.dumps({"error": f"Startup error: {general_error_msg}"}),
             "headers": {"Content-Type": "application/json"}
         }
 EOF
@@ -113,30 +111,14 @@ aws lambda update-function-code \
     --zip-file fileb://bella-lambda-minimal.zip \
     --region $REGION
 
-echo "⚙️ Updating function configuration..."
-aws lambda update-function-configuration \
-    --function-name $FUNCTION_NAME \
-    --environment Variables='{
-        "APP_ENV":"production",
-        "DATABASE_URL":"sqlite+aiosqlite:////tmp/bella.db",
-        "OPENAI_API_KEY":"placeholder-openai-key",
-        "OPENAI_MODEL":"gpt-4o-mini",
-        "BELLA_API_KEY":"33333333333333333333333333",
-        "TWILIO_AUTH_TOKEN":"placeholder-twilio-token",
-        "TWILIO_ACCOUNT_SID":"ACtest123",
-        "TWILIO_PHONE_NUMBER":"+15559876543",
-        "GOOGLE_CALENDAR_ENABLED":"false",
-        "REDIS_URL":"",
-        "TWILIO_WEBHOOK_URL":"https://bhcnf2i6eh3bxnr6lrnt4ubouy0obfjy.lambda-url.us-east-1.on.aws/twilio/voice"
-    }' \
-    --region $REGION
+echo "⚙️ Skipping environment variable update (preserving existing corrected credentials)..."
 
 echo "✅ Lambda deployment completed!"
-echo "Function URL: https://bhcnf2i6eh3bxnr6lrnt4ubouy0obfjy.lambda-url.us-east-1.on.aws/"
+echo "Function URL: https://totw7mm2ox6nqyicgtu5dujxrq0uhgki.lambda-url.ca-central-1.on.aws/"
 
 # Clean up
 rm -rf lambda-deployment-minimal
 rm bella-lambda-minimal.zip
 
 echo "🧪 Testing deployment..."
-curl -s "https://bhcnf2i6eh3bxnr6lrnt4ubouy0obfjy.lambda-url.us-east-1.on.aws/healthz" || echo "Health check failed"
+curl -s "https://totw7mm2ox6nqyicgtu5dujxrq0uhgki.lambda-url.ca-central-1.on.aws/healthz" || echo "Health check failed"

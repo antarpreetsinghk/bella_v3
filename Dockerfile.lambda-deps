@@ -1,0 +1,33 @@
+# Use the same Python version as Lambda runtime
+FROM python:3.11-slim
+
+# Install system dependencies needed for building
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements file
+COPY requirements-lambda-minimal.txt .
+
+# Create target directory for packages
+RUN mkdir -p /lambda-packages
+
+# Install dependencies with correct architecture
+RUN pip install --no-cache-dir \
+    --target /lambda-packages \
+    -r requirements-lambda-minimal.txt
+
+# Remove unnecessary files to reduce size
+RUN find /lambda-packages -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+RUN find /lambda-packages -name "*.pyc" -delete
+RUN find /lambda-packages -name "*.so" -delete 2>/dev/null || true
+RUN find /lambda-packages -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+RUN find /lambda-packages -name "test_*" -delete 2>/dev/null || true
+
+# Set the final command
+CMD ["echo", "Dependencies built successfully"]

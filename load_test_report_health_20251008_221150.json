@@ -1,0 +1,145 @@
+{
+  "timestamp": "2025-10-08T22:11:50.804940",
+  "test_type": "health",
+  "configuration": {
+    "base_url": "http://15.157.56.64",
+    "concurrent_users": 5,
+    "total_requests": 20
+  },
+  "results": {
+    "total_requests": 20,
+    "successful_requests": 20,
+    "failed_requests": 0,
+    "success_rate": 100.0,
+    "total_time": 0.9241971969604492,
+    "requests_per_second": 21.640403223226716
+  },
+  "response_times": {
+    "average": 0.1299340009689331,
+    "median": 0.10761785507202148,
+    "min": 0.09912705421447754,
+    "max": 0.20327997207641602
+  },
+  "detailed_results": [
+    {
+      "success": true,
+      "response_time": 0.20327997207641602,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.20252537727355957,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.20284056663513184,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.20263433456420898,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.20232725143432617,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.11000514030456543,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10944652557373047,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10938119888305664,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10822439193725586,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10906124114990234,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.09912705421447754,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10143566131591797,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.1013791561126709,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10132646560668945,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10093331336975098,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10701131820678711,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10695457458496094,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10698270797729492,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10697150230407715,
+      "status_code": 200,
+      "error": ""
+    },
+    {
+      "success": true,
+      "response_time": 0.10683226585388184,
+      "status_code": 200,
+      "error": ""
+    }
+  ]
+}

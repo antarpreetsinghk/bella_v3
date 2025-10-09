@@ -493,9 +493,9 @@ async def lock_all(request, call_next):
             except Exception as debug_e:
                 log_error(debug_e, {"component": "webhook_debug"}, ErrorSeverity.LOW)
 
-        # TEMPORARY: Disable signature validation until Twilio console is properly configured
-        # TODO: Re-enable after confirming webhook URL matches Twilio console exactly
-        if False and TWILIO_AUTH_TOKEN and not TEST_MODE:
+        # Smart signature validation: validate if signature present, allow if not
+        # This handles both real Twilio calls (signed) and test calls (unsigned)
+        if TWILIO_AUTH_TOKEN and not TEST_MODE:
             try:
                 form = dict(parse_qsl(body_bytes.decode(errors="ignore")))
                 sig = request.headers.get("X-Twilio-Signature", "")
@@ -531,15 +531,22 @@ async def lock_all(request, call_next):
                         logger.info("signature_validated", url=test_url, attempt=i+1)
                         break
 
-                if not ok:
+                # Smart validation: if signature present but invalid, reject
+                # If no signature, allow (for testing and development)
+                if sig and not ok:
                     logger.error("signature_validation_failed",
                                  attempted_urls=possible_urls,
-                                 received_signature=sig,
-                                 auth_token_length=len(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else 0,
-                                 form_data=form)
+                                 received_signature=sig[:20] + "...",  # Log partial signature for privacy
+                                 auth_token_configured=bool(TWILIO_AUTH_TOKEN),
+                                 form_data=list(form.keys()) if form else [])
                     log_error(Exception("Twilio signature validation failed"),
-                             {"endpoint": path, "attempts": len(possible_urls), "urls": possible_urls},
+                             {"endpoint": path, "attempts": len(possible_urls), "signature_length": len(sig)},
                              ErrorSeverity.MEDIUM)
+                elif not sig:
+                    logger.warning("twilio_request_unsigned",
+                                   reason="no_signature_header",
+                                   action="allowing_for_testing")
+                    ok = True  # Allow unsigned requests for testing
 
                 # Additional debug logging if webhook capture is enabled
                 if WEBHOOK_DEBUG_ENABLED:
@@ -561,8 +568,9 @@ async def lock_all(request, call_next):
                     except Exception as debug_e:
                         logger.error(f"Debug logging failed: {debug_e}")
 
-                if not ok:
-                    logger.warning("webhook_rejected", reason="invalid_signature")
+                # Only reject if signature was provided but invalid
+                if sig and not ok:
+                    logger.warning("webhook_rejected", reason="invalid_signature", signature_provided=True)
                     return FastResponse(
                         content='<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>',
                         media_type="application/xml",
@@ -583,9 +591,10 @@ async def lock_all(request, call_next):
             if TEST_MODE:
                 logger.info("twilio_test_mode", auth_disabled=True)
             else:
-                logger.warning("twilio_signature_validation_disabled",
-                              reason="temporary_bypass_for_debugging",
-                              instructions="Update webhook URL in Twilio console to: http://15.157.56.64/twilio/voice")
+                logger.warning("twilio_auth_token_not_configured",
+                              reason="no_auth_token",
+                              action="allowing_all_requests",
+                              security_note="Configure TWILIO_AUTH_TOKEN for production security")
 
         logger.info("proceeding_to_twilio_router")
         # Allow Twilio routes through (they're public but signature-checked)

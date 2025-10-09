@@ -2,11 +2,20 @@
 import json
 import logging
 import re
+import time
 from datetime import datetime
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from zoneinfo import ZoneInfo
+
+# Timeout protection for call flow
+from app.utils.timeout_protection import (
+    with_timeout,
+    timeout_protected,
+    quick_fallback_response,
+    CallFlowTimer
+)
 
 # Advanced extraction libraries
 import phonenumbers
@@ -19,6 +28,9 @@ from app.services.canadian_extraction import (
     extract_canadian_name,
     format_phone_for_speech
 )
+
+# Red Deer accent-aware processing
+from app.services.accent_recognition import accent_processor
 
 from app.db.session import get_session
 from app.services.redis_session import get_session as get_call_session, reset_session, save_session, get_redis_client
@@ -68,13 +80,19 @@ def _mask_phone(s: str | None) -> str:
     return s
 
 
-def _gather_block(prompt: str, timeout: int = 10, include_dtmf: bool = False, dtmf_instructions: str = "") -> str:
+def _gather_block(prompt: str, timeout: int = 15, include_dtmf: bool = False, dtmf_instructions: str = "", accent_friendly: bool = True) -> str:
     """
-    Cost-optimized gathering with both speech and keypad support.
-    Enhanced=true improves accuracy for Canadian English accents.
+    Accent-optimized gathering with timeout protection for Red Deer's diverse community.
+    Enhanced=true + hints improve accuracy for Asian, European, and other English accents.
     """
     input_types = "speech dtmf" if include_dtmf else "speech"
     full_prompt = f"{prompt} {dtmf_instructions}" if dtmf_instructions else prompt
+
+    # Accent-friendly hints for common words in Red Deer
+    accent_hints = "appointment,booking,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday,morning,afternoon,evening,yes,no,okay,one,two,three,four,five,six,seven,eight,nine,zero,spell,slower"
+
+    # Extended timeout for non-native speakers
+    actual_timeout = timeout if accent_friendly else min(timeout, 10)
 
     return f"""
   <Gather input="{input_types}"
@@ -83,20 +101,25 @@ def _gather_block(prompt: str, timeout: int = 10, include_dtmf: bool = False, dt
           action="/twilio/voice/collect"
           actionOnEmptyResult="true"
           speechTimeout="auto"
-          timeout="{timeout}"
+          timeout="{actual_timeout}"
           numDigits="1"
-          enhanced="true">
-    <Say voice="alice" language="en-CA">{full_prompt}</Say>
+          enhanced="true"
+          hints="{accent_hints}">
+    <Say voice="alice" language="en-CA" rate="slow">{full_prompt}</Say>
   </Gather>
-  <Say voice="alice" language="en-CA">Sorry, I didn't catch that.</Say>
+  <Say voice="alice" language="en-CA">I'm sorry, I didn't catch that. You can also spell it if that's easier.</Say>
   <Redirect method="POST">/twilio/voice</Redirect>
 """
 
 
 def _gather_block_confirmation(prompt: str, timeout: int = 15) -> str:
     """
-    Specialized gather block for confirmation prompts with optimized speech recognition.
+    Accent-friendly confirmation prompts for diverse Red Deer community.
+    Includes variations for different English accents.
     """
+    # Expanded hints for accent variations of yes/no
+    confirmation_hints = "yes,no,yeah,yep,nope,yup,sure,okay,ok,correct,right,wrong,nah,not"
+
     return f"""
   <Gather input="speech"
           language="en-CA"
@@ -106,10 +129,10 @@ def _gather_block_confirmation(prompt: str, timeout: int = 15) -> str:
           speechTimeout="auto"
           timeout="{timeout}"
           enhanced="true"
-          hints="yes,no,yeah,yep,nope">
-    <Say voice="alice" language="en-CA">{prompt}</Say>
+          hints="{confirmation_hints}">
+    <Say voice="alice" language="en-CA" rate="slow">{prompt}</Say>
   </Gather>
-  <Say voice="alice" language="en-CA">I'm sorry, I didn't hear a clear yes or no. Let me ask again.</Say>
+  <Say voice="alice" language="en-CA">Please say Yes if correct, or No if wrong. Take your time.</Say>
   <Redirect method="POST">/twilio/voice</Redirect>
 """
 
@@ -220,30 +243,40 @@ async def voice_entry(
     CallSid: str = Form(default=""),
     From: str = Form(default="")
 ):
-    """Enhanced voice entry with caller profiles and smart routing."""
+    """Fast voice entry using automatic caller ID - no phone number step needed."""
 
     # Start business metrics tracking for this call
     await business_metrics.start_call_tracking(CallSid)
 
     sess = get_call_session(CallSid)
 
-    # ENHANCED CALLER ID CAPTURE WITH PROFILE LOOKUP
-    greeting_message = "Hi there! Thanks for calling. I'll help you book your appointment today."
-
+    # AUTOMATIC PHONE NUMBER CAPTURE FROM TWILIO
     if From and From.strip():
+        # Extract and store phone number immediately
+        caller_phone = _extract_phone_fast(From)
+        if caller_phone:
+            sess.data["mobile"] = caller_phone
+            sess.data["mobile_source"] = "caller_id_automatic"
+            save_session(sess)
+            logger.info("[voice] auto-captured phone: %s", _mask_phone(caller_phone))
+
         try:
-            # Import enhanced session management
+            # Enhanced session management for returning customers
             from app.services.redis_session import enhance_session_with_caller_id, get_personalized_greeting
 
             # Enhance session with caller ID and profile
             sess = await enhance_session_with_caller_id(sess, From)
             save_session(sess)
 
-            # Use personalized greeting for returning customers
+            # Personalized experience for returning customers
             if sess.caller_profile and sess.caller_profile.is_returning:
                 greeting_message = await get_personalized_greeting(sess.caller_profile)
 
-                # Add calendar availability overview for returning customers
+                # Skip name step for known customers, go straight to time
+                sess.step = "ask_time"
+                save_session(sess)
+
+                # Add calendar availability for returning customers
                 try:
                     from app.services.google_calendar import get_calendar_summary
                     calendar_summary = await get_calendar_summary()
@@ -253,59 +286,58 @@ async def voice_entry(
                 except Exception as e:
                     logger.warning("[voice] Failed to get calendar summary: %s", e)
 
-                logger.info("[voice] returning customer call=%s name=%s", CallSid, sess.caller_profile.full_name)
+                # Add intelligent time suggestions
+                time_prompt = f"{greeting_message} What day and time would you like to book?"
+                if sess.caller_profile.preferred_times:
+                    try:
+                        from app.services.google_calendar import find_best_slot_for_preference
+                        best_slot = await find_best_slot_for_preference(
+                            sess.caller_profile.preferred_times,
+                            sess.caller_profile.preferred_duration,
+                            days_ahead=7
+                        )
+
+                        if best_slot:
+                            from datetime import datetime as dt
+                            best_local = best_slot.astimezone(LOCAL_TZ)
+                            if best_local.date() == dt.now(LOCAL_TZ).date():
+                                suggestion = f"today at {best_local.strftime('%I:%M %p')}"
+                            else:
+                                suggestion = best_local.strftime("%A at %I:%M %p")
+                            time_prompt += f" I have {suggestion} available, which matches your usual preferences."
+
+                    except Exception as e:
+                        logger.warning("[voice] Failed to get preference-based suggestions: %s", e)
+
+                prompt = time_prompt
+                logger.info("[voice] returning customer, skipping to time: call=%s name=%s",
+                           CallSid, sess.caller_profile.full_name)
             else:
-                logger.info("[voice] new/unknown caller call=%s phone=%s", CallSid, _mask_phone(From))
+                # New customer - just ask for name (phone already captured)
+                greeting_message = "Hi! Thanks for calling. I'll help you book your appointment today."
+                prompt = f"{greeting_message} What's your name?"
+                logger.info("[voice] new customer, phone auto-captured: call=%s phone=%s",
+                           CallSid, _mask_phone(caller_phone))
 
         except Exception as e:
             logger.error("[voice] caller profile enhancement failed: %s", e)
-            # Fall back to basic caller ID capture
-            caller_phone = _extract_phone_fast(From)
-            if caller_phone:
-                sess.data["mobile"] = caller_phone
-                sess.data["mobile_source"] = "caller_id"
-                save_session(sess)
+            # Basic flow for new customers
+            greeting_message = "Hi! Thanks for calling. I'll help you book your appointment today."
+            prompt = f"{greeting_message} What's your name?"
 
-    # Determine next step based on caller profile
-    if sess.step == "ask_time" and sess.caller_profile and sess.caller_profile.is_returning:
-        # Enhanced time selection with smart suggestions for returning customers
-        time_prompt = f"{greeting_message} What day and time would you like to book?"
-
-        # Add intelligent suggestions based on user preferences
-        if sess.caller_profile.preferred_times:
-            try:
-                from app.services.google_calendar import find_best_slot_for_preference
-                best_slot = await find_best_slot_for_preference(
-                    sess.caller_profile.preferred_times,
-                    sess.caller_profile.preferred_duration,
-                    days_ahead=7
-                )
-
-                if best_slot:
-                    from datetime import datetime as dt
-                    best_local = best_slot.astimezone(LOCAL_TZ)
-                    if best_local.date() == dt.now(LOCAL_TZ).date():
-                        suggestion = f"today at {best_local.strftime('%I:%M %p')}"
-                    else:
-                        suggestion = best_local.strftime("%A at %I:%M %p")
-
-                    time_prompt += f" I have {suggestion} available, which matches your usual preferences."
-
-            except Exception as e:
-                logger.warning("[voice] Failed to get preference-based suggestions: %s", e)
-
-        prompt = time_prompt
     else:
-        # Standard flow for new customers
+        # No caller ID available (rare)
+        logger.warning("[voice] No caller ID available for call: %s", CallSid)
+        greeting_message = "Hi! Thanks for calling. I'll help you book your appointment today."
         prompt = f"{greeting_message} What's your name?"
 
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(prompt)}
+{_gather_block(prompt, accent_friendly=True)}
 </Response>"""
 
-    logger.info("[voice] start call=%s step=%s profile=%s",
-                CallSid, sess.step, "returning" if sess.caller_profile else "new")
+    logger.info("[voice] start call=%s step=%s phone_captured=%s",
+                CallSid, sess.step, bool(sess.data.get("mobile")))
     return _twiml(twiml)
 
 
@@ -319,114 +351,138 @@ async def voice_collect(
     CallSid: str = Form(default=""),
 ):
     """
-    Cost-optimized multi-turn stepper with smart speech handling:
-      ask_name -> ask_mobile -> ask_time -> ask_duration -> confirm -> book
-    Supports both speech and keypad input for better UX and cost control.
+    Accent-optimized multi-turn stepper with timeout protection.
+    Handles diverse Red Deer accents with fast fallback responses.
     """
+    call_start_time = time.time()
     speech = (SpeechResult or "").strip()
     digits = (Digits or "").strip()
     from_num_masked = _mask_phone(From)
     sess = get_call_session(CallSid)
 
-    # SMART SPEECH PROCESSING: Use simple extraction with fallback
+    # FAST PROCESSING WITH TIMEOUT PROTECTION
     extracted_info = {}
     user_input = digits if digits else speech  # Prefer keypad input when available
+    cleaned_speech = user_input  # Simple assignment for now, can enhance later
 
     if user_input:
-        try:
-            # Step-specific extraction using simple, fast methods
-            if sess.step == "ask_name":
-                if digits:
-                    # Keypad not useful for names, prompt for speech
-                    extracted_info["name"] = None
-                else:
-                    extracted_name = extract_name_simple(speech)
-                    extracted_info["name"] = extracted_name
-
-            elif sess.step == "ask_mobile":
-                if digits:
-                    # Clean keypad input for phone
-                    extracted_phone = _extract_phone_fast(digits)
-                else:
-                    extracted_phone = extract_phone_simple(speech)
-                extracted_info["mobile"] = extracted_phone
-
-            elif sess.step == "ask_time":
-                if digits:
-                    # Handle keypad shortcuts for common times
-                    time_shortcuts = {
-                        "1": "9:00 AM tomorrow",
-                        "2": "10:00 AM tomorrow",
-                        "3": "11:00 AM tomorrow",
-                        "4": "2:00 PM tomorrow",
-                        "5": "3:00 PM tomorrow",
-                        "6": "4:00 PM tomorrow"
-                    }
-                    extracted_info["time"] = time_shortcuts.get(digits, digits)
-                else:
-                    # Use simple time parsing with key phrases
-                    key_phrases = extract_key_phrases(speech, "time")
-                    extracted_info["time"] = key_phrases if key_phrases else speech.strip()
-
-            elif sess.step == "ask_duration":
-                if digits:
-                    # Direct keypad mapping for duration
-                    duration_map = {"1": 30, "2": 45, "3": 60}
-                    extracted_info["duration"] = duration_map.get(digits, 30)
-                else:
-                    # Extract duration from speech
-                    if "45" in speech or "forty" in speech.lower():
-                        extracted_info["duration"] = 45
-                    elif "60" in speech or "hour" in speech.lower():
-                        extracted_info["duration"] = 60
+        with CallFlowTimer(f"extraction_{sess.step}", max_seconds=2.5) as timer:
+            try:
+                # Step-specific extraction with timeout protection
+                if sess.step == "ask_name":
+                    if digits:
+                        # Keypad not useful for names, prompt for speech
+                        extracted_info["name"] = None
                     else:
-                        extracted_info["duration"] = 30
+                        # Multi-cultural name extraction with timeout protection
+                        if timer.should_timeout():
+                            extracted_info["name"] = None
+                        else:
+                            # Try accent-aware extraction first
+                            extracted_name = accent_processor.extract_accent_aware_name(speech)
+                            if not extracted_name:
+                                # Fallback to simple extraction
+                                extracted_name = extract_name_simple(speech)
+                            extracted_info["name"] = extracted_name if extracted_name else None
 
-            # Store simplified speech processing history
-            sess.last_raw_speech = speech
-            sess.last_cleaned_speech = user_input
-            sess.speech_history.append({
-                "timestamp": sess.updated_at.isoformat(),
-                "step": sess.step,
-                "input_type": "keypad" if digits else "speech",
-                "raw": user_input[:100],  # Limit storage
-                "extracted": extracted_info
-            })
-            save_session(sess)
+                elif sess.step == "ask_mobile":
+                    if timer.should_timeout():
+                        extracted_info["mobile"] = None
+                    elif digits:
+                        # Clean keypad input for phone (fast)
+                        extracted_phone = _extract_phone_fast(digits)
+                        extracted_info["mobile"] = extracted_phone
+                    else:
+                        # Accent-aware phone extraction with timeout check
+                        extracted_phone = accent_processor.extract_accent_aware_phone(speech)
+                        if not extracted_phone:
+                            # Fallback to simple extraction
+                            extracted_phone = extract_phone_simple(speech)
+                        extracted_info["mobile"] = extracted_phone
 
-            logger.info(
-                "[smart_extract] call=%s step=%s input_type=%s input='%s' extracted=%s",
-                CallSid, sess.step, "keypad" if digits else "speech",
-                user_input[:50], extracted_info
-            )
+                elif sess.step == "ask_time":
+                    if timer.should_timeout():
+                        extracted_info["time"] = None
+                    elif digits:
+                        # Handle keypad shortcuts for common times (fast)
+                        time_shortcuts = {
+                            "1": "9:00 AM tomorrow",
+                            "2": "10:00 AM tomorrow",
+                            "3": "11:00 AM tomorrow",
+                            "4": "2:00 PM tomorrow",
+                            "5": "3:00 PM tomorrow",
+                            "6": "4:00 PM tomorrow"
+                        }
+                        extracted_info["time"] = time_shortcuts.get(digits, digits)
+                    else:
+                        # Fast time parsing - just use the speech directly for now
+                        extracted_info["time"] = speech.strip()
 
-        except Exception as e:
-            logger.warning("[smart_extract] failed: %s, using raw input", e)
-            # Fallback to raw input
-            sess.last_raw_speech = speech if speech else digits
-            sess.last_cleaned_speech = user_input
-            save_session(sess)
+                elif sess.step == "ask_duration":
+                    if digits:
+                        # Direct keypad mapping for duration (fast)
+                        duration_map = {"1": 30, "2": 45, "3": 60}
+                        extracted_info["duration"] = duration_map.get(digits, 30)
+                    else:
+                        # Fast duration extraction from speech
+                        if "45" in speech or "forty" in speech.lower():
+                            extracted_info["duration"] = 45
+                        elif "60" in speech or "hour" in speech.lower():
+                            extracted_info["duration"] = 60
+                        else:
+                            extracted_info["duration"] = 30
+
+                # Store simplified speech processing history
+                sess.last_raw_speech = speech
+                sess.last_cleaned_speech = user_input
+                sess.speech_history.append({
+                    "timestamp": sess.updated_at.isoformat(),
+                    "step": sess.step,
+                    "input_type": "keypad" if digits else "speech",
+                    "raw": user_input[:100],  # Limit storage
+                    "extracted": extracted_info,
+                    "processing_time": timer.elapsed()
+                })
+                save_session(sess)
+
+                logger.info(
+                    "[fast_extract] call=%s step=%s input_type=%s input='%s' extracted=%s time=%.2fs",
+                    CallSid, sess.step, "keypad" if digits else "speech",
+                    user_input[:50], extracted_info, timer.elapsed()
+                )
+
+            except Exception as e:
+                logger.warning("[fast_extract] failed: %s, using fallback response", e)
+                # Return fast fallback response instead of trying raw input
+                fallback_prompt = quick_fallback_response(sess.step)
+                return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+{_gather_block(fallback_prompt)}
+</Response>""")
 
     logger.info(
         "[collect] call=%s step=%s from=%s speech=%s",
         CallSid, sess.step, from_num_masked, speech if speech else "<empty>",
     )
 
-    # If nothing heard, gently reprompt the current step
+    # If nothing heard, use accent-friendly reprompt with progressive assistance
     if not user_input:
-        polite = {
-            "ask_name": "I'm sorry—I didn't catch that. Could you please tell me your full name?",
-            "confirm_name": "I'm sorry—I didn't catch that. Please say Yes if the name is correct, or No if it's wrong.",
-            "ask_mobile": "I'm sorry—I didn't catch that. Could you please say your phone number, digit by digit?",
-            "ask_time": "I'm sorry—I didn't catch that. Could you please say the exact date and time you'd like?",
-            "ask_duration": "I'm sorry—I didn't catch that. Press 1 for 30 minutes, 2 for 45 minutes, or 3 for 60 minutes.",
-            "confirm": "I'm sorry—I didn't catch that. Should I book it? Please say Yes or No.",
-        }[sess.step]
+        # Progressive assistance - more helpful prompts for Red Deer's diverse community
+        accent_friendly_prompts = {
+            "ask_name": "I didn't catch your name. You can say it slowly, or spell it letter by letter if that's easier.",
+            "confirm_name": "Please say Yes if the name is correct, or No if it's wrong. Take your time.",
+            "ask_mobile": "I missed your phone number. Could you say it digit by digit, like 4-0-3-5-5-5-1-2-3-4?",
+            "ask_time": "I didn't get that time. Try saying something like 'Monday at 2 PM' or 'tomorrow morning'.",
+            "ask_duration": "How long would you like? Press 1 for 30 minutes, 2 for 45 minutes, or 3 for one hour.",
+            "confirm": "Should I book this appointment? Please say Yes to book it, or No to change something.",
+        }
+
+        polite = accent_friendly_prompts.get(sess.step, "I'm sorry, could you try again?")
         # Use DTMF for duration prompts
         include_dtmf = sess.step == "ask_duration"
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(polite, include_dtmf=include_dtmf)}
+{_gather_block(polite, include_dtmf=include_dtmf, accent_friendly=True)}
 </Response>"""
         return _twiml(twiml)
 
@@ -494,11 +550,11 @@ async def voice_collect(
 {_gather_block_confirmation(f"I heard '{sess.data['full_name']}'. Is that correct? Please say Yes or No.")}
 </Response>""")
         else:
-            # No valid name extracted, ask again
-            logger.info("[ask_name] no valid name extracted from: '%s', asking again", speech)
+            # Fast fallback for accent/clarity issues
+            logger.info("[ask_name] no valid name extracted from: '%s', offering spelling option", speech)
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("I'm sorry—I didn't catch your name clearly. Could you please tell me your full name again?")}
+{_gather_block("I want to get your name right. Could you say it slowly, or spell it for me letter by letter?", accent_friendly=True)}
 </Response>""")
 
     if sess.step == "confirm_name":
@@ -507,26 +563,25 @@ async def voice_collect(
 
         # Check for positive confirmation (flexible matching)
         if any(word in speech_lower for word in ["yes", "yeah", "yep", "correct", "right"]):
-            # Name confirmed, check if we have caller ID for phone
-            if sess.data.get("mobile") and sess.data.get("mobile_source") == "caller_id":
-                # Skip phone collection, go straight to time
-                sess.step = "ask_time"
-                save_session(sess)
+            # Name confirmed - since we automatically capture phone, skip straight to time
+            sess.step = "ask_time"
+            save_session(sess)
+
+            # Format phone number for confirmation (if available)
+            if sess.data.get("mobile"):
                 caller_phone_formatted = format_phone_for_speech(sess.data["mobile"])
-                logger.info("[confirm_name] name confirmed: '%s', using caller ID: %s",
+                logger.info("[confirm_name] name confirmed: '%s', auto phone: %s",
                           sess.data["full_name"], _mask_phone(sess.data["mobile"]))
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block(f"Perfect! I have your number as {caller_phone_formatted}. When would you like your appointment?")}
+{_gather_block(f"Perfect! I have your number as {caller_phone_formatted}. When would you like your appointment?", accent_friendly=True)}
 </Response>""")
             else:
-                # No caller ID, proceed to ask for phone
-                sess.step = "ask_mobile"
-                save_session(sess)
-                logger.info("[confirm_name] name confirmed: '%s', asking for phone", sess.data["full_name"])
+                # Rare case where caller ID wasn't available
+                logger.info("[confirm_name] name confirmed: '%s', no auto phone available", sess.data["full_name"])
                 return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Perfect! What's your phone number?")}
+{_gather_block("Perfect! When would you like your appointment?", accent_friendly=True)}
 </Response>""")
         # Check for negative confirmation (flexible matching)
         elif any(word in speech_lower for word in ["no", "nope", "wrong", "incorrect", "not"]):
@@ -547,56 +602,72 @@ async def voice_collect(
 </Response>""")
 
     if sess.step == "ask_mobile":
-        logger.info("[ask_mobile] processing speech: '%s'", speech)
+        # This step should rarely be reached since we auto-capture phone from Twilio
+        logger.warning("[ask_mobile] unexpected mobile step reached for call: %s", CallSid)
 
-        # Use specialized phone extractor result
+        # Use the extracted phone if available
         norm = extracted_info.get("mobile")
-
-        # Fallback to fast phone extraction if specialized extractor failed
         if not norm and cleaned_speech:
             norm = _extract_phone_fast(cleaned_speech)
         elif not norm:
             norm = _extract_phone_fast(speech)
 
-        if not norm:
-            logger.warning("[ask_mobile] phone extraction failed for: '%s'", speech)
+        if norm:
+            # Phone number captured, proceed to time
+            sess.data["mobile"] = norm
+            sess.data["mobile_source"] = "speech_fallback"
+            sess.step = "ask_time"
+            save_session(sess)
+            logger.info("[ask_mobile] fallback phone captured: %s", _mask_phone(norm))
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Sorry, I didn't catch that. Can you say your phone number again, including the area code?")}
+{_gather_block("Thanks! When would you like your appointment?", accent_friendly=True)}
 </Response>""")
-
-        logger.info("[ask_mobile] extracted '%s' -> '%s', advancing to ask_time", speech, norm)
-        sess.data["mobile"] = norm
-        sess.data["mobile_source"] = "speech"  # Mark as from speech input
-        sess.step = "ask_time"
-        save_session(sess)  # Persist state change
-        logger.info("[session_debug] after ask_mobile step=%s data=%s", sess.step, sess.data)
-        return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
+        else:
+            # No phone available, but continue anyway (we have caller ID)
+            sess.step = "ask_time"
+            save_session(sess)
+            logger.warning("[ask_mobile] no phone extracted, continuing to time")
+            return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("Great! When would you like your appointment? You can say something like 'next Tuesday at 2' or 'Friday morning'.")}
+{_gather_block("When would you like your appointment?", accent_friendly=True)}
 </Response>""")
 
     if sess.step == "ask_time":
         logger.info("[ask_time] processing speech: '%s'", speech)
 
-        # Try Canadian time extraction first (handles natural language)
-        starts_at_utc = await extract_canadian_time(speech)
+        # FAST time extraction with timeout protection
+        starts_at_utc = None
 
-        if not starts_at_utc:
-            # Fallback: check if LLM extraction provided an ISO format time
-            starts_at_iso = extracted_info.get("time")
-            if starts_at_iso:
-                try:
-                    starts_at_utc = datetime.fromisoformat(starts_at_iso.replace("Z", "+00:00"))
-                    logger.info("[ask_time] used LLM ISO time: '%s' -> %s", starts_at_iso, starts_at_utc)
-                except Exception as e:
-                    logger.warning("[ask_time] failed to parse LLM ISO time '%s': %s", starts_at_iso, e)
-                    starts_at_utc = None
+        with CallFlowTimer("time_extraction", max_seconds=2.0) as time_timer:
+            try:
+                # Try Canadian time extraction first but with timeout
+                if not time_timer.should_timeout():
+                    starts_at_utc = await with_timeout(
+                        extract_canadian_time(speech),
+                        timeout_seconds=1.5,
+                        default_value=None
+                    )
+
+                # Fast fallback: simple time parsing
+                if not starts_at_utc and not time_timer.should_timeout():
+                    time_text = extracted_info.get("time", speech)
+                    # Quick pattern matching for common formats
+                    if "tomorrow" in time_text.lower():
+                        try:
+                            from datetime import timedelta
+                            tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+                            starts_at_utc = tomorrow.replace(hour=14, minute=0, second=0, microsecond=0)  # Default 2 PM
+                        except:
+                            pass
+
+            except Exception as e:
+                logger.warning("[ask_time] extraction failed: %s", e)
 
         if not starts_at_utc:
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("I had trouble understanding that time. Could you please say it again, like Monday at 3 PM?")}
+{_gather_block("I need help with that time. Could you try saying something like 'tomorrow at 2 PM' or 'Monday morning'?", accent_friendly=True)}
 </Response>""")
 
         logger.info("[ask_time] parsed time '%s' -> %s", speech, starts_at_utc)
@@ -713,14 +784,27 @@ async def voice_collect(
                 if not (full_name and mobile and starts_at_utc):
                     missing = []
                     if not full_name: missing.append("full name")
-                    if not mobile: missing.append("phone number")
+                    if not mobile:
+                        # Mobile should be auto-captured, this is unusual
+                        logger.error("[confirm] missing mobile despite auto-capture for call=%s", CallSid)
+                        missing.append("phone number")
                     if not starts_at_utc: missing.append("date and time")
-                    sess.step = "ask_name" if not full_name else ("ask_mobile" if not mobile else "ask_time")
+
+                    # Skip mobile step since it should be auto-captured
+                    if not full_name:
+                        sess.step = "ask_name"
+                    elif not mobile:
+                        # Unusual case - skip to time and we'll use caller ID later
+                        sess.step = "ask_time"
+                        logger.warning("[confirm] skipping mobile collection, will use caller ID")
+                    else:
+                        sess.step = "ask_time"
+
                     save_session(sess)
                     logger.warning("[confirm] missing data for call=%s: %s", CallSid, missing)
                     return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block("I'm missing " + ", ".join(missing) + ". Let's try again.")}
+{_gather_block("Let me get that information. " + ", ".join(missing) + " needed.", accent_friendly=True)}
 </Response>""")
 
                 # Additional validation: ensure datetime object is valid

@@ -137,14 +137,14 @@ class ErrorAggregator:
         # Decide whether to log
         if self.should_log(pattern, severity):
             logger.error(
-                "aggregated_error",
-                error_hash=fingerprint,
-                error_type=error_type,
-                message=message[:200],  # Truncate for token efficiency
-                count=pattern.count,
-                severity=severity.value,
-                first_seen=pattern.first_seen,
-                **context
+                "aggregated_error: hash=%s type=%s message=%s count=%d severity=%s first_seen=%s context=%s",
+                fingerprint,
+                error_type,
+                message[:200],  # Truncate for token efficiency
+                pattern.count,
+                severity.value,
+                pattern.first_seen,
+                context
             )
 
         return fingerprint
