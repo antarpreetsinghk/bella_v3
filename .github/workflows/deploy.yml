@@ -343,7 +343,7 @@ jobs:
              export AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}' && \
              export AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}' && \
              echo '🔍 Pre-startup verification...' && \
-             if netstat -tlnp | grep :8000; then \
+             if ss -tulpn | grep :8000; then \
                echo '⚠️ Port 8000 still in use, performing emergency cleanup...' && \
                sudo lsof -ti:8000 | xargs -r sudo kill -9 && \
                sleep 5; \
@@ -397,41 +397,37 @@ jobs:
              docker compose -f docker-compose.cost-optimized.yml ps -a && \
              echo '🔍 Container health details...' && \
              docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' && \
-             echo '🌐 Network connectivity check...' && \
-             netstat -tlnp | grep :8000 && \
-             echo '📡 Testing application endpoints...' && \
-             for i in {1..20}; do \
-               echo \"Health check iteration $i/20 ($(date))\"; \
-               if curl -f -s --connect-timeout 15 --max-time 45 http://localhost:8000/healthz; then \
-                 echo '✅ Health endpoint responded successfully'; \
+             echo '🌐 Checking port availability...' && \
+             ss -tulpn | grep :8000 && echo 'Port 8000 is bound and available' && \
+             echo '📡 Testing application health endpoint...' && \
+             for i in {1..10}; do \
+               echo \"Health check iteration $i/10...\"; \
+               if curl -f http://localhost:8000/healthz; then \
+                 echo '✅ Health endpoint test successful!'; \
                  echo '🔍 Testing readiness endpoint...'; \
-                 if curl -f -s --connect-timeout 15 --max-time 45 http://localhost:8000/readyz; then \
-                   echo '✅ Ready endpoint confirmed - Application is fully operational'; \
-                   echo '📊 Final deployment verification:'; \
-                   curl -s http://localhost:8000/healthz | head -5; \
-                   exit 0; \
+                 if curl -f http://localhost:8000/readyz 2>/dev/null; then \
+                   echo '✅ Ready endpoint confirmed - Application is fully operational!'; \
                  else \
-                   echo '⚠️ Ready endpoint not responding, but health is OK'; \
-                   echo '📊 Health endpoint response:'; \
-                   curl -s http://localhost:8000/healthz | head -5; \
+                   echo '⚠️ Ready endpoint not available, but health check passed'; \
                  fi; \
-                 echo '✅ Basic health check passed - Application is operational'; \
+                 echo '📊 Final verification - health endpoint response:'; \
+                 curl -s http://localhost:8000/healthz; \
+                 echo '✅ Health check successful - Application is operational!'; \
                  exit 0; \
                else \
-                 echo \"❌ Attempt $i/20 failed, waiting 20s...\"; \
-                 if [ $i -eq 10 ]; then \
+                 echo \"❌ Health check attempt $i/10 failed\"; \
+                 if [ $i -eq 5 ]; then \
                    echo '🔍 Mid-check diagnostics:'; \
-                   docker compose -f docker-compose.cost-optimized.yml logs app --tail=10; \
-                   netstat -tlnp | grep :8000 || echo 'Port 8000 not bound'; \
+                   docker compose -f docker-compose.cost-optimized.yml logs app --tail=5; \
+                   ss -tulpn | grep :8000 || echo 'Port 8000 not found'; \
                  fi; \
                fi; \
-               sleep 20; \
+               sleep 15; \
              done; \
-             echo '❌ Health check failed after 20 attempts (6.7 minutes)'; \
-             echo '📋 Complete container logs for debugging:'; \
-             docker compose -f docker-compose.cost-optimized.yml logs app --tail=50; \
-             echo '🔍 Network and port diagnostic:'; \
-             netstat -tlnp | grep :8000 || echo 'Port 8000 not bound'; \
+             echo '❌ Health check failed after 10 attempts (2.5 minutes)'; \
+             echo '📋 Application logs for debugging:'; \
+             docker compose -f docker-compose.cost-optimized.yml logs app --tail=20; \
+             echo '🔍 Port status check:'; \
              ss -tulpn | grep :8000 || echo 'Port 8000 not found in ss'; \
              echo '🐳 Docker system status:'; \
              docker system df; \
