@@ -1,4 +1,4 @@
-version: '3.8'
+# Docker Compose v3.8 format (version declaration is obsolete as of Docker Compose v2)
 
 services:
   db:
