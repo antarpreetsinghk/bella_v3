@@ -12,6 +12,7 @@ class Appointment(Base):
         sa.Index("ix_appointments_user_id", "user_id"),
         sa.Index("ix_appointments_starts_at", "starts_at"),
         sa.Index("ix_appointments_google_event_id", "google_event_id"),
+        sa.Index("ix_appointments_is_test_data", "is_test_data"),  # Fast test data queries
     )
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
@@ -30,6 +31,14 @@ class Appointment(Base):
 
     # Google Calendar integration
     google_event_id: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
+
+    # Test data identification for safe production testing
+    is_test_data: Mapped[bool] = mapped_column(
+        sa.Boolean,
+        nullable=False,
+        server_default="false",
+        comment="Flag to identify test appointments for safe cleanup"
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),

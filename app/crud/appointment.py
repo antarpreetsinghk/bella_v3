@@ -20,6 +20,7 @@ async def create_appointment_unique(
     duration_min: int = 30,
     status: str = "booked",
     notes: Optional[str] = None,
+    is_test_data: bool = False,  # Flag for production testing
 ) -> Appointment:
     # Check if appointment already exists (within 1-minute window to handle datetime precision)
     from datetime import timedelta
@@ -48,6 +49,7 @@ async def create_appointment_unique(
         duration_min=duration_min,
         status=status,
         notes=notes,
+        is_test_data=is_test_data,  # Mark test data for safe cleanup
         created_at=datetime.now(timezone.utc)  # Explicit timezone-aware timestamp
     )
     db.add(appt)
