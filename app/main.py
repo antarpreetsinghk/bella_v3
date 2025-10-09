@@ -254,6 +254,80 @@ async def debug_session(call_sid: str):
             "success": False
         }
 
+@app.get("/debug/webhook-config", include_in_schema=False)
+async def debug_webhook_config():
+    """Debug endpoint for webhook configuration inspection."""
+    return {
+        "twilio_config": {
+            "auth_token_configured": bool(TWILIO_AUTH_TOKEN),
+            "auth_token_length": len(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else 0,
+            "account_sid": TWILIO_ACCOUNT_SID,
+            "phone_number": get_config_value("TWILIO_PHONE_NUMBER", ""),
+            "webhook_url": get_config_value("TWILIO_WEBHOOK_URL", ""),
+            "production_base_url": PRODUCTION_BASE_URL,
+        },
+        "environment": {
+            "app_env": APP_ENV,
+            "test_mode": TEST_MODE,
+            "webhook_debug_enabled": WEBHOOK_DEBUG_ENABLED,
+        },
+        "expected_webhook_urls": [
+            f"http://15.157.56.64/twilio/voice",
+            f"https://15.157.56.64/twilio/voice",
+            f"{PRODUCTION_BASE_URL}/twilio/voice",
+            f"{PRODUCTION_BASE_URL}:443/twilio/voice",
+        ],
+        "instructions": {
+            "twilio_console_url": "https://console.twilio.com/us1/develop/phone-numbers/manage/incoming",
+            "required_webhook_url": "http://15.157.56.64/twilio/voice",
+            "webhook_method": "POST"
+        }
+    }
+
+@app.post("/debug/webhook-test", include_in_schema=False)
+async def debug_webhook_test(request: Request):
+    """Test endpoint to manually validate webhook signatures."""
+    try:
+        body_bytes = await request.body()
+        form = dict(parse_qsl(body_bytes.decode(errors="ignore")))
+        sig = request.headers.get("X-Twilio-Signature", "")
+
+        received_url = str(request.url).replace("/debug/webhook-test", "/twilio/voice")
+
+        test_urls = [
+            received_url,
+            received_url.replace("http://", "https://"),
+            f"{PRODUCTION_BASE_URL}/twilio/voice",
+            f"{PRODUCTION_BASE_URL}:443/twilio/voice",
+        ]
+
+        validation_results = []
+
+        for url in test_urls:
+            from twilio.request_validator import RequestValidator
+            validator = RequestValidator(TWILIO_AUTH_TOKEN)
+            is_valid = validator.validate(url, form, sig) if TWILIO_AUTH_TOKEN else False
+
+            validation_results.append({
+                "url": url,
+                "valid": is_valid
+            })
+
+        return {
+            "signature_header": sig,
+            "form_data": form,
+            "validation_results": validation_results,
+            "auth_token_configured": bool(TWILIO_AUTH_TOKEN),
+            "success": True
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "success": False
+        }
+
 @app.get("/debug/logs/{call_sid}", include_in_schema=False)
 async def debug_logs(call_sid: str):
     """Debug endpoint for call trace logs."""
@@ -385,6 +459,8 @@ PUBLIC_EXACT = {
     "/admin",       # Admin dashboard root (custom auth)
     "/version",     # deployment tracking
     "/debug/db",    # temporary debugging
+    "/debug/webhook-config",  # webhook configuration debugging
+    "/debug/webhook-test",    # webhook signature testing
 }
 
 # Public prefixes (still may be guarded by their own logic)
@@ -467,7 +543,7 @@ async def lock_all(request, call_next):
 
                         # Save request dump for analysis
                         request_data = {
-                            "timestamp": str(logger.getEffectiveLevel()),
+                            "timestamp": datetime.now().isoformat(),
                             "url": url_for_validation,
                             "method": request.method,
                             "headers": dict(request.headers),
