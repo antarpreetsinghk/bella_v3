@@ -225,18 +225,27 @@ class TestReturningCustomerFlow:
         assert "John" in response.text
         assert "Welcome back" in response.text
 
-    @patch('app.services.redis_session.enhance_session_with_caller_id')
+    @patch('app.services.redis_session.enhance_session_with_caller_id', new_callable=AsyncMock)
     @pytest.mark.essential
     @pytest.mark.integration
-    @pytest.mark.skip(reason="Mock enhancement needs fixing - deployment blocker resolved")
     def test_returning_customer_skip_to_time(self, mock_enhance):
         """Test that returning customers skip name/phone collection"""
         client = TestClient(app)
         call_sid = "TEST_RETURNING_SKIP_001"
 
         # Create a proper mock session with working attributes
-        from app.services.redis_session import CallSession
+        from app.services.redis_session import CallSession, CallerProfile
         from datetime import datetime
+
+        # Create a real CallerProfile object instead of MagicMock
+        mock_profile = CallerProfile(
+            mobile="+14165559876",
+            full_name="Mary Johnson",
+            call_count=3,
+            is_returning=True,
+            preferred_duration=45,
+            last_call_date=datetime.now()
+        )
 
         mock_session = CallSession(
             call_sid=call_sid,
@@ -245,18 +254,11 @@ class TestReturningCustomerFlow:
                 "mobile": "+14165559876",
                 "full_name": "Mary Johnson",
                 "is_returning_customer": True
-            }
+            },
+            caller_profile=mock_profile
         )
 
-        # Mock the caller profile with proper attributes
-        mock_profile = MagicMock()
-        mock_profile.is_returning = True
-        mock_profile.full_name = "Mary Johnson"
-        mock_profile.mobile = "+14165559876"
-        mock_profile.created_at = datetime.now()
-        mock_profile.last_call_at = datetime.now()
-        mock_session.caller_profile = mock_profile
-
+        # Configure AsyncMock for the async function
         mock_enhance.return_value = mock_session
 
         response = client.post("/twilio/voice", data={

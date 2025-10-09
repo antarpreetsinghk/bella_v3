@@ -9,12 +9,31 @@ import httpx
 import json
 import time
 import asyncio
+import os
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
-# Test configuration
-FUNCTION_URL = "https://4tatuoazsjydotugwkou4wuste0uhtrz.lambda-url.ca-central-1.on.aws"
-TIMEOUT = 30
+# Test configuration - use environment variables for flexible deployment
+FUNCTION_URL = os.getenv("PRODUCTION_TEST_URL", os.getenv("FUNCTION_URL", ""))
+PRODUCTION_API_KEY = os.getenv("PRODUCTION_API_KEY", "")
+TIMEOUT = int(os.getenv("PRODUCTION_TEST_TIMEOUT", "30"))
+
+# Skip all production tests if URL is not configured
+skip_if_no_url = pytest.mark.skipif(
+    not FUNCTION_URL,
+    reason="PRODUCTION_TEST_URL or FUNCTION_URL environment variable not set"
+)
+
+# Helper function to get headers with authentication
+def get_request_headers(api_key: Optional[str] = None) -> Dict[str, str]:
+    """Get HTTP headers with optional authentication"""
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+    # Add API key if provided
+    if api_key or PRODUCTION_API_KEY:
+        headers["X-API-Key"] = api_key or PRODUCTION_API_KEY
+
+    return headers
 
 
 class CallScenario:
@@ -46,11 +65,11 @@ class CallScenario:
                     **step.get("data", {})
                 }
 
-                # Make request
+                # Make request with authentication headers
                 response = await client.post(
                     f"{FUNCTION_URL}/twilio/voice",
                     data=payload,
-                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                    headers=get_request_headers()
                 )
 
                 # Validate response
@@ -87,7 +106,8 @@ class CallScenario:
         return results
 
 
-@pytest.mark.skip(reason="Lambda URL authorization issue - will fix after deployment")
+@skip_if_no_url
+@pytest.mark.production
 class TestRealWorldCallScenarios:
     """Test realistic call scenarios"""
 
@@ -150,7 +170,6 @@ class TestRealWorldCallScenarios:
             ])
         }
 
-    @pytest.mark.skip(reason="Production scenario tests need TwiML validation refinement")
     @pytest.mark.asyncio
     async def test_individual_scenarios(self, scenarios):
         """Test each scenario individually"""
@@ -167,7 +186,6 @@ class TestRealWorldCallScenarios:
 
                 print(f"✅ {scenario_name}: {result['steps_completed']}/{result['total_steps']} steps in {result['total_duration']:.2f}s")
 
-    @pytest.mark.skip(reason="Production scenario tests need TwiML validation refinement")
     @pytest.mark.asyncio
     async def test_concurrent_scenarios(self, scenarios):
         """Test multiple scenarios running concurrently"""
@@ -196,8 +214,6 @@ class TestRealWorldCallScenarios:
             assert successful_scenarios >= 2, f"Too many concurrent failures: {successful_scenarios}/{len(selected_scenarios)}"
 
     @pytest.mark.essential
-    @pytest.mark.production
-    @pytest.mark.skip(reason="Lambda URL authorization issue - will fix after deployment")
     def test_peak_hour_simulation(self):
         """Simulate peak hour call pattern (10 calls in 5 minutes)"""
         print("\n📈 Simulating peak hour call pattern")
@@ -219,7 +235,7 @@ class TestRealWorldCallScenarios:
                             "To": "+15559876543",
                             "AccountSid": "ACtest123"
                         },
-                        headers={"Content-Type": "application/x-www-form-urlencoded"}
+                        headers=get_request_headers()
                     )
 
                     if response.status_code == 200:
@@ -242,7 +258,6 @@ class TestRealWorldCallScenarios:
         print(f"✅ Peak hour simulation: {success_rate}% success, {avg_response_time:.2f}s avg response")
 
     @pytest.mark.essential
-    @pytest.mark.production
     def test_daily_pattern_simulation(self):
         """Simulate daily call pattern (50 calls over extended period)"""
         print("\n📅 Simulating daily call pattern (compressed)")
@@ -264,7 +279,7 @@ class TestRealWorldCallScenarios:
                             "AccountSid": "ACtest123",
                             "CallerCity": f"TestCity{hour}"
                         },
-                        headers={"Content-Type": "application/x-www-form-urlencoded"}
+                        headers=get_request_headers()
                     )
 
                     call_results.append({
@@ -296,7 +311,6 @@ class TestRealWorldCallScenarios:
         print(f"   Average response time: {avg_response_time:.2f}s")
 
     @pytest.mark.essential
-    @pytest.mark.production
     def test_edge_case_scenarios(self):
         """Test edge cases and error conditions"""
         print("\n🔬 Testing edge case scenarios")
@@ -326,7 +340,7 @@ class TestRealWorldCallScenarios:
                     response = client.post(
                         f"{FUNCTION_URL}/twilio/voice",
                         data=case["data"],
-                        headers={"Content-Type": "application/x-www-form-urlencoded"}
+                        headers=get_request_headers()
                     )
 
                     # Should handle gracefully
@@ -339,13 +353,12 @@ class TestRealWorldCallScenarios:
                     pytest.fail(f"Edge case {case['name']} threw exception: {e}")
 
 
-@pytest.mark.skip(reason="Lambda URL authorization issue - will fix after deployment")
+@skip_if_no_url
+@pytest.mark.production
 class TestCallFlowValidation:
     """Validate call flow logic and state management"""
 
     @pytest.mark.essential
-    @pytest.mark.production
-    @pytest.mark.unit
     def test_appointment_extraction_accuracy(self):
         """Test accuracy of appointment information extraction"""
         test_cases = [
@@ -379,7 +392,7 @@ class TestCallFlowValidation:
                         "To": "+15559876543",
                         "AccountSid": "ACtest123"
                     },
-                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                    headers=get_request_headers()
                 )
 
                 # Provide input
@@ -390,7 +403,7 @@ class TestCallFlowValidation:
                         "SpeechResult": case["input"],
                         "AccountSid": "ACtest123"
                     },
-                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                    headers=get_request_headers()
                 )
 
                 # Check if extraction worked (basic validation)
@@ -398,7 +411,6 @@ class TestCallFlowValidation:
                 print(f"✅ Extraction test {i+1}: processed '{case['input'][:30]}...'")
 
     @pytest.mark.essential
-    @pytest.mark.production
     def test_call_state_progression(self):
         """Test proper call state progression"""
         call_sid = f"TEST_STATE_{int(time.time())}"
@@ -416,7 +428,7 @@ class TestCallFlowValidation:
                     "To": "+15559876543",
                     "AccountSid": "ACtest123"
                 },
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
+                headers=get_request_headers()
             )
             responses.append(r1.text)
 
@@ -428,7 +440,7 @@ class TestCallFlowValidation:
                     "SpeechResult": "My name is Test User",
                     "AccountSid": "ACtest123"
                 },
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
+                headers=get_request_headers()
             )
             responses.append(r2.text)
 

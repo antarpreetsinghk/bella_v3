@@ -547,7 +547,7 @@ async def voice_collect(
             logger.info("[session_debug] after ask_name step=%s data=%s", sess.step, sess.data)
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block_confirmation(f"I heard '{sess.data['full_name']}'. Is that correct? Please say Yes or No.")}
+{_gather_block_confirmation(f"I heard {sess.data['full_name']}. Is that correct? Please say Yes or No.")}
 </Response>""")
         else:
             # Fast fallback for accent/clarity issues
@@ -598,7 +598,7 @@ async def voice_collect(
             # Unclear response, ask for clarification
             return _twiml(f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-{_gather_block_confirmation(f"I heard '{sess.data['full_name']}'. Please say Yes if that's correct, or No if it's wrong.")}
+{_gather_block_confirmation(f"I heard {sess.data['full_name']}. Please say Yes if that's correct, or No if it's wrong.")}
 </Response>""")
 
     if sess.step == "ask_mobile":
