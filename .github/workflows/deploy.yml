@@ -95,15 +95,13 @@ jobs:
         echo "🔧 Testing SSH connectivity to ${{ env.EC2_HOST }}..."
 
         # Configure SSH client options for reliability
-        cat >> ~/.ssh/config << EOF
-Host ${{ env.EC2_HOST }}
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
-    ConnectTimeout 30
-    ConnectionAttempts 3
-    TCPKeepAlive yes
-    BatchMode yes
-EOF
+        echo "Host ${{ env.EC2_HOST }}" >> ~/.ssh/config
+        echo "    ServerAliveInterval 30" >> ~/.ssh/config
+        echo "    ServerAliveCountMax 3" >> ~/.ssh/config
+        echo "    ConnectTimeout 30" >> ~/.ssh/config
+        echo "    ConnectionAttempts 3" >> ~/.ssh/config
+        echo "    TCPKeepAlive yes" >> ~/.ssh/config
+        echo "    BatchMode yes" >> ~/.ssh/config
 
         # Try ssh-keyscan with enhanced retry logic
         KEYSCAN_SUCCESS=false
