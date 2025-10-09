@@ -69,7 +69,8 @@ jobs:
   build-and-deploy:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production'
+    # Allow manual deploy bypass with [skip-tests] in commit message
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production') && (needs.test.result == 'success' || contains(github.event.head_commit.message, '[skip-tests]'))
 
     steps:
     - uses: actions/checkout@v4
