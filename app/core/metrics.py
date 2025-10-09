@@ -6,9 +6,17 @@ from collections import defaultdict, deque
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
-import structlog
+try:
+    import structlog
+    STRUCTLOG_AVAILABLE = True
+except ImportError:
+    import logging
+    STRUCTLOG_AVAILABLE = False
 
-logger = structlog.get_logger(__name__)
+if STRUCTLOG_AVAILABLE:
+    logger = structlog.get_logger(__name__)
+else:
+    logger = logging.getLogger(__name__)
 
 class MetricsCollector:
     """Collect and track application performance metrics."""
