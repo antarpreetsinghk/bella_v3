@@ -493,9 +493,9 @@ async def lock_all(request, call_next):
             except Exception as debug_e:
                 log_error(debug_e, {"component": "webhook_debug"}, ErrorSeverity.LOW)
 
-        # TEMPORARY: Disable signature validation for testing
-        # if TWILIO_AUTH_TOKEN and not TEST_MODE:
-        if False:
+        # TEMPORARY: Disable signature validation until Twilio console is properly configured
+        # TODO: Re-enable after confirming webhook URL matches Twilio console exactly
+        if False and TWILIO_AUTH_TOKEN and not TEST_MODE:
             try:
                 form = dict(parse_qsl(body_bytes.decode(errors="ignore")))
                 sig = request.headers.get("X-Twilio-Signature", "")
@@ -532,10 +532,13 @@ async def lock_all(request, call_next):
                         break
 
                 if not ok:
-                    logger.warning("signature_validation_failed",
-                                 attempted_urls=len(possible_urls))
+                    logger.error("signature_validation_failed",
+                                 attempted_urls=possible_urls,
+                                 received_signature=sig,
+                                 auth_token_length=len(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else 0,
+                                 form_data=form)
                     log_error(Exception("Twilio signature validation failed"),
-                             {"endpoint": path, "attempts": len(possible_urls)},
+                             {"endpoint": path, "attempts": len(possible_urls), "urls": possible_urls},
                              ErrorSeverity.MEDIUM)
 
                 # Additional debug logging if webhook capture is enabled
@@ -580,8 +583,9 @@ async def lock_all(request, call_next):
             if TEST_MODE:
                 logger.info("twilio_test_mode", auth_disabled=True)
             else:
-                logger.warning("twilio_signature_validation_temporarily_disabled",
-                              reason="no_auth_token")
+                logger.warning("twilio_signature_validation_disabled",
+                              reason="temporary_bypass_for_debugging",
+                              instructions="Update webhook URL in Twilio console to: http://15.157.56.64/twilio/voice")
 
         logger.info("proceeding_to_twilio_router")
         # Allow Twilio routes through (they're public but signature-checked)
