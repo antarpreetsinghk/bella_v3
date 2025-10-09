@@ -12,6 +12,9 @@ pydantic-core==2.33.2
 pydantic-settings==2.10.1
 python-multipart==0.0.20
 
+# Async I/O (pin to working version)
+anyio==4.8.0
+
 # Database (minimal footprint)
 sqlalchemy==2.0.43
 asyncpg==0.30.0
