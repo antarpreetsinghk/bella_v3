@@ -7,10 +7,19 @@ from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, Optional
 
-import structlog
+try:
+    import structlog
+    STRUCTLOG_AVAILABLE = True
+except ImportError:
+    import logging
+    STRUCTLOG_AVAILABLE = False
+
 from fastapi import HTTPException
 
-logger = structlog.get_logger(__name__)
+if STRUCTLOG_AVAILABLE:
+    logger = structlog.get_logger(__name__)
+else:
+    logger = logging.getLogger(__name__)
 
 class ErrorSeverity(Enum):
     """Error severity levels for smart alerting."""

@@ -8,7 +8,13 @@ from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-import structlog
+try:
+    import structlog
+    STRUCTLOG_AVAILABLE = True
+except ImportError:
+    STRUCTLOG_AVAILABLE = False
+    structlog = None
+
 from fastapi import Request
 
 # Request correlation context
@@ -31,7 +37,7 @@ class TokenEfficientProcessor:
             event_dict['error'] = str(event_dict['error'])[:self.max_length]
 
         # Remove verbose stack traces in production
-        if 'exc_info' in event_dict and not structlog.is_configured():
+        if 'exc_info' in event_dict and STRUCTLOG_AVAILABLE and not structlog.is_configured():
             del event_dict['exc_info']
 
         return event_dict
@@ -54,6 +60,14 @@ class CorrelationProcessor:
 
 def setup_logging(debug: bool = False, max_log_length: int = 200):
     """Configure structured logging for the application."""
+
+    if not STRUCTLOG_AVAILABLE:
+        # Fallback to standard logging for Lambda
+        logging.basicConfig(
+            level=logging.INFO if not debug else logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        )
+        return
 
     processors = [
         structlog.stdlib.filter_by_level,
@@ -82,9 +96,13 @@ def setup_logging(debug: bool = False, max_log_length: int = 200):
         format="%(message)s",
     )
 
-def get_logger(name: str = __name__) -> structlog.stdlib.BoundLogger:
+def get_logger(name: str = __name__):
     """Get a structured logger instance."""
-    return structlog.get_logger(name)
+    if STRUCTLOG_AVAILABLE:
+        return structlog.get_logger(name)
+    else:
+        # Fallback to standard logging for Lambda
+        return logging.getLogger(name)
 
 def set_correlation_id(correlation_id: str):
     """Set correlation ID for current request context."""

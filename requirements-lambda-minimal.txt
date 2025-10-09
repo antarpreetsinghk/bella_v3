@@ -37,5 +37,5 @@ google-api-python-client==2.100.0
 google-auth==2.41.1
 google-auth-httplib2==0.1.0
 
-# Logging
-structlog==23.2.0
+# Logging (removed structlog due to Lambda circular import issue)
+# structlog==23.2.0
