@@ -21,12 +21,13 @@ GitGuardian detected Twilio Master Credentials exposed in public GitHub reposito
 **File**: `TEST_CALENDAR_SYNC_GUIDE.md` (lines with curl example)
 
 ```
-Twilio Account SID: ACa413c6bff64704f3481ef8c1f5410778
-Twilio Auth Token: 11be258d711c0741531b6d4cddc8b0ae
-Twilio Phone Number: +14382565719
+Twilio Account SID: ACa413c... [REDACTED]
+Twilio Auth Token: 11be258... [REDACTED]
+Twilio Phone Number: +1438... [REDACTED]
 ```
 
 **Exposure Duration**: ~7 minutes (02:39 - 02:46 UTC)
+**Status**: Credentials rotated and revoked
 
 ---
 
@@ -41,7 +42,7 @@ https://console.twilio.com/
 1. Go to Account → API Keys & Tokens
 2. Click "Create new Auth Token"
 3. Note the new token
-4. Revoke the old token: `11be258d711c0741531b6d4cddc8b0ae`
+4. Revoke the old token: `11be258...` [REDACTED]
 
 ### 2. Remove Credentials from Files
 
