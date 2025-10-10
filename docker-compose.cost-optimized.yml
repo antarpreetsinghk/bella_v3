@@ -36,8 +36,12 @@ services:
       - SECRETS_MANAGER_SECRET_ID=bella-env-82YlZa
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - APP_ENV=testing
+      - APP_ENV=${APP_ENV:-production}
       - FORCE_REBUILD=f64ed22
+      - GOOGLE_CALENDAR_ENABLED=${GOOGLE_CALENDAR_ENABLED:-false}
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID}
+      - BUSINESS_EMAIL=${BUSINESS_EMAIL}
+      - GOOGLE_SERVICE_ACCOUNT_JSON=${GOOGLE_SERVICE_ACCOUNT_JSON}
     volumes:
       - ./logs:/app/logs
     depends_on:
