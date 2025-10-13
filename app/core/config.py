@@ -62,7 +62,10 @@ class Settings(BaseSettings):
     CLOUDWATCH_NAMESPACE: str = "Bella/Application"
 
     # (Optional app knobs you can use later)
-    ALLOWED_CORS_ORIGINS: str = "*"  # comma-separated list, e.g. "http://localhost:3000,https://your.app"
+    # SECURITY: Restrict CORS to known origins only. "*" allows any website!
+    # For single customer: "https://yourdomain.com"
+    # For development: "http://localhost:3000,http://localhost:8000,https://yourdomain.com"
+    ALLOWED_CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8000"  # comma-separated list
 
     # Sync URI (Alembic) - PostgreSQL and SQLite
     @property

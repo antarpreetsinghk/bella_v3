@@ -393,7 +393,9 @@ def clean_speech_artifacts(speech: str, extracted_name: str) -> str:
         'book', 'appointment', 'schedule', 'time', 'today', 'tomorrow',
         'yesterday', 'can', 'you', 'could', 'would', 'should',
         # Additional speech artifacts from production
-        'that', 'this', 'with', 'for', 'from', 'to', 'at', 'in', 'on'
+        'that', 'this', 'with', 'for', 'from', 'to', 'at', 'in', 'on',
+        # Contractions that appear before names
+        'its', "it's", 'it', 'is'
     ]
 
     # Split name into words
@@ -483,7 +485,8 @@ def validate_canadian_name_context(speech: str, extracted_name: str) -> tuple[bo
     speech_artifacts = [
         'so what', 'what', 'so', 'pit', 'pit called', 'called', 'cold', 'her', 'him',
         'my name', 'calling', 'speaking', 'hello', 'hi', 'hey', 'thanks', 'thank you',
-        'please', 'uh', 'um', 'ah', 'oh', 'okay', 'ok', 'yes', 'no', 'yeah', 'yep'
+        'please', 'uh', 'um', 'ah', 'oh', 'okay', 'ok', 'yes', 'no', 'yeah', 'yep',
+        'its', "it's", 'it', 'is'
     ]
 
     for artifact in speech_artifacts:
@@ -573,7 +576,7 @@ async def extract_canadian_name(speech: str, llm_fallback=None) -> Optional[str]
         # Remove trigger phrases to isolate name
         trigger_patterns = [
             r'^(hi|hello|hey)\s*[.,]*\s*',  # Remove greetings at start
-            r'\b(my (?:full )?name is|i\'m|this is|i am|it\'s|it is)\s*[.,]*\s*',
+            r'\b(my (?:full )?name is|i\'m|this is|i am|it\'s|it is|its)\s*[.,]*\s*',
             r'\b(calling|speaking)\s*$'
         ]
 

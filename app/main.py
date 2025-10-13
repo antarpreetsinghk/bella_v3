@@ -32,10 +32,18 @@ except ImportError:
     logger.info("Webhook debugging disabled (capture_webhook_details not found)")
 from fastapi import FastAPI, Depends, Request
 from fastapi.responses import JSONResponse, Response as FastResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from twilio.request_validator import RequestValidator
 
 from app.db.session import get_session
+from app.core.config import settings
+from app.middleware.security import SecurityHeadersMiddleware
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Routers
 from app.api.routes.users import router as users_router
@@ -50,6 +58,23 @@ from app.api.routes.dashboard import router as dashboard_router  # OLD: Cost-onl
 from app.api.routes.performance import router as performance_router  # OLD: Performance-only
 
 app = FastAPI(title="Bella V3", description="AI-powered appointment booking system")
+
+# SECURITY: Add rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# SECURITY: Add security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
+
+# SECURITY: Add CORS middleware with restricted origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins_list,  # Restricted to configured domains
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"],
+)
 
 # Add logging middleware with error handling
 try:
@@ -93,6 +118,10 @@ async def version():
 @app.get("/debug/db", include_in_schema=False)
 async def debug_db(db: AsyncSession = Depends(get_session)):
     """Debug database connectivity and timezone handling."""
+    # SECURITY: Disable debug endpoints in production
+    if APP_ENV.lower() not in ("development", "dev", "local"):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
     from datetime import datetime, timezone
     from app.crud.user import create_user, get_user_by_mobile
     from app.crud.appointment import create_appointment_unique
@@ -196,6 +225,10 @@ async def debug_db(db: AsyncSession = Depends(get_session)):
 @app.post("/debug/extraction", include_in_schema=False)
 async def debug_extraction(request: Request):
     """Debug endpoint for testing extraction functions."""
+    # SECURITY: Disable debug endpoints in production
+    if APP_ENV.lower() not in ("development", "dev", "local"):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
     try:
         data = await request.json()
         extraction_type = data.get("type", "name")
@@ -234,6 +267,10 @@ async def debug_extraction(request: Request):
 @app.get("/debug/session/{call_sid}", include_in_schema=False)
 async def debug_session(call_sid: str):
     """Debug endpoint for session state inspection."""
+    # SECURITY: Disable debug endpoints in production
+    if APP_ENV.lower() not in ("development", "dev", "local"):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
     try:
         from app.services.redis_session import get_session_data
 
@@ -257,6 +294,10 @@ async def debug_session(call_sid: str):
 @app.get("/debug/webhook-config", include_in_schema=False)
 async def debug_webhook_config():
     """Debug endpoint for webhook configuration inspection."""
+    # SECURITY: Disable debug endpoints in production
+    if APP_ENV.lower() not in ("development", "dev", "local"):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
     return {
         "twilio_config": {
             "auth_token_configured": bool(TWILIO_AUTH_TOKEN),
@@ -287,6 +328,10 @@ async def debug_webhook_config():
 @app.post("/debug/webhook-test", include_in_schema=False)
 async def debug_webhook_test(request: Request):
     """Test endpoint to manually validate webhook signatures."""
+    # SECURITY: Disable debug endpoints in production
+    if APP_ENV.lower() not in ("development", "dev", "local"):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
     try:
         body_bytes = await request.body()
         form = dict(parse_qsl(body_bytes.decode(errors="ignore")))
@@ -331,6 +376,10 @@ async def debug_webhook_test(request: Request):
 @app.get("/debug/logs/{call_sid}", include_in_schema=False)
 async def debug_logs(call_sid: str):
     """Debug endpoint for call trace logs."""
+    # SECURITY: Disable debug endpoints in production
+    if APP_ENV.lower() not in ("development", "dev", "local"):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
     try:
         from utils.debug_helpers import DebugHelper
 
@@ -354,6 +403,10 @@ async def debug_logs(call_sid: str):
 @app.get("/debug/health", include_in_schema=False)
 async def debug_health():
     """Comprehensive debug health check."""
+    # SECURITY: Disable debug endpoints in production
+    if APP_ENV.lower() not in ("development", "dev", "local"):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
     try:
         # Test all extraction functions
         test_results = {}
