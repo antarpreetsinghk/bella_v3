@@ -375,4 +375,9 @@ VoiceFlow AI is built with privacy-first principles and enterprise security stan
 **🛡️ Security Team:** [security@voiceflow-ai.com](mailto:security@voiceflow-ai.com)
 **🤝 Professional Services:** [services@voiceflow-ai.com](mailto:services@voiceflow-ai.com)
 
+---
+
+**Repository Status:** 🔒 Private repository with enhanced security controls
+**Last Updated:** October 2025
+
 </div>
