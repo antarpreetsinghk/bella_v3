@@ -514,6 +514,9 @@ PUBLIC_EXACT = {
     "/debug/db",    # temporary debugging
     "/debug/webhook-config",  # webhook configuration debugging
     "/debug/webhook-test",    # webhook signature testing
+    "/docs",        # Swagger UI - interactive API documentation (public for portfolio)
+    "/redoc",       # ReDoc - alternative API documentation view
+    "/openapi.json", # OpenAPI specification (required by Swagger/ReDoc)
 }
 
 # Public prefixes (still may be guarded by their own logic)
