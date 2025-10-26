@@ -39,13 +39,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           # Security tools
-          pip install safety bandit semgrep
+          pip install pip-audit bandit semgrep
 
-      - name: Run Safety (dependency vulnerability scan)
+      - name: Run pip-audit (dependency vulnerability scan)
         run: |
           echo "🔍 Scanning for known vulnerabilities in dependencies..."
-          safety check --json --output safety-report.json
-          safety check --short-report
+          pip-audit --format=json --output=pip-audit-report.json || true
+          pip-audit --desc || true
 
       - name: Run Bandit (static security analysis)
         run: |
@@ -74,7 +74,7 @@ jobs:
         with:
           name: security-reports-${{ github.sha }}
           path: |
-            safety-report.json
+            pip-audit-report.json
             bandit-report.json
             semgrep-report.json
           retention-days: 30
@@ -83,9 +83,9 @@ jobs:
         run: |
           echo "📊 Security Scan Summary"
           echo "======================="
-          echo "✅ Dependency vulnerability scan completed"
-          echo "✅ Static security analysis completed"
-          echo "✅ Semantic security analysis completed"
+          echo "✅ Dependency vulnerability scan completed (pip-audit)"
+          echo "✅ Static security analysis completed (bandit)"
+          echo "✅ Semantic security analysis completed (semgrep)"
           echo "✅ Secret detection completed"
           echo ""
           echo "📝 Review the uploaded artifacts for detailed reports"

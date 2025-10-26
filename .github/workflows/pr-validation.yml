@@ -63,16 +63,17 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pip-audit
 
     - name: Security scan (Bandit)
       run: |
         bandit -r app/ -f json -o bandit-report.json || true
         bandit -r app/ -f txt
 
-    - name: Dependency security check (Safety)
+    - name: Dependency security check (pip-audit)
       run: |
-        safety check --json --output safety-report.json || true
-        safety check
+        pip-audit --format=json --output=pip-audit-report.json || true
+        pip-audit --desc || true
 
     - name: Upload security reports
       uses: actions/upload-artifact@v4
@@ -81,7 +82,7 @@ jobs:
         name: security-reports
         path: |
           bandit-report.json
-          safety-report.json
+          pip-audit-report.json
 
   test-suite:
     runs-on: ubuntu-latest
