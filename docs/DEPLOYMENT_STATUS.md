@@ -21,11 +21,11 @@ Cost:            ~$10-15/month (cost-optimized)
 
 ### Endpoints
 ```
-API Documentation: http://15.157.56.64:8000/docs
-ReDoc View:        http://15.157.56.64:8000/redoc
-Health Check:      http://15.157.56.64:8000/healthz
-LLM Demo:          http://15.157.56.64:8000/llm-demo/status
-Metrics:           http://15.157.56.64:8000/metrics
+API Documentation: http://15.157.56.64/docs
+ReDoc View:        http://15.157.56.64/redoc
+Health Check:      http://15.157.56.64/healthz
+LLM Demo:          http://15.157.56.64/llm-demo/status
+Metrics:           http://15.157.56.64/metrics
 ```
 
 ### Services
@@ -204,11 +204,11 @@ ssh ubuntu@15.157.56.64 "docker exec bella-redis redis-cli FLUSHALL"
 
 ```bash
 # Quick health check
-curl http://15.157.56.64:8000/healthz
+curl http://15.157.56.64/healthz
 
 # Full endpoint test
-curl http://15.157.56.64:8000/docs    # Should return HTML
-curl http://15.157.56.64:8000/metrics # Should return JSON
+curl http://15.157.56.64/docs    # Should return HTML
+curl http://15.157.56.64/metrics # Should return JSON
 
 # Container health
 ssh ubuntu@15.157.56.64 "docker ps --format 'table {{.Names}}\t{{.Status}}'"

@@ -14,7 +14,7 @@
 
 *Backend Engineering • Performance Optimization • Cloud Architecture*
 
-[🔗 Live API Documentation](http://15.157.56.64:8000/docs) • [📊 Performance Optimization](PERFORMANCE_OPTIMIZATION.md) • [🏗️ Architecture Guide](CLAUDE.md)
+[🔗 Live API Documentation](http://15.157.56.64/docs) • [📊 Performance Optimization](PERFORMANCE_OPTIMIZATION.md) • [🏗️ Architecture Guide](CLAUDE.md)
 
 > 🏗️ **Live Infrastructure:** Deployed on AWS EC2 (ARM64 Graviton2 cost-optimized instance). Full CI/CD pipeline via GitHub Actions with automated testing, security scanning, and deployment. [Architecture details →](CLAUDE.md)
 
@@ -277,15 +277,15 @@ async def test_complete_booking_flow():
 
 ### **🚀 Live Deployment**
 
-**Production API:** http://15.157.56.64:8000/docs *(AWS EC2 ARM64 Graviton2)*
+**Production API:** http://15.157.56.64/docs *(AWS EC2 ARM64 Graviton2)*
 
 | Endpoint | URL | Purpose |
 |----------|-----|---------|
-| **📖 API Docs** | http://15.157.56.64:8000/docs | Interactive Swagger UI |
-| **📄 ReDoc** | http://15.157.56.64:8000/redoc | Alternative documentation |
-| **🏥 Health Check** | http://15.157.56.64:8000/healthz | Service status |
-| **🤖 LLM Demo** | http://15.157.56.64:8000/llm-demo/status | AI integration showcase |
-| **📊 Metrics** | http://15.157.56.64:8000/metrics | Performance metrics |
+| **📖 API Docs** | http://15.157.56.64/docs | Interactive Swagger UI |
+| **📄 ReDoc** | http://15.157.56.64/redoc | Alternative documentation |
+| **🏥 Health Check** | http://15.157.56.64/healthz | Service status |
+| **🤖 LLM Demo** | http://15.157.56.64/llm-demo/status | AI integration showcase |
+| **📊 Metrics** | http://15.157.56.64/metrics | Performance metrics |
 
 **Infrastructure:** Cost-optimized deployment (~$13/month) with auto-restart policies and health monitoring.
 **CI/CD:** Fully automated deployment via GitHub Actions with security scanning and testing.
@@ -491,7 +491,7 @@ Built as a production-ready solution for Canadian small-to-medium businesses req
 
 ## 🚀 **Explore the Code**
 
-[![Live API Docs](https://img.shields.io/badge/🔗%20Live%20API%20Docs-Interactive%20Swagger-1e40af?style=for-the-badge)](http://15.157.56.64:8000/docs)
+[![Live API Docs](https://img.shields.io/badge/🔗%20Live%20API%20Docs-Interactive%20Swagger-1e40af?style=for-the-badge)](http://15.157.56.64/docs)
 [![Performance Study](https://img.shields.io/badge/📊%20Performance%20Study-200x%20Faster-059669?style=for-the-badge)](PERFORMANCE_OPTIMIZATION.md)
 [![Architecture Guide](https://img.shields.io/badge/🏗️%20Architecture-Technical%20Deep%20Dive-7c3aed?style=for-the-badge)](CLAUDE.md)
 
