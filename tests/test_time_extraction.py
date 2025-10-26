@@ -96,7 +96,10 @@ class TestTimeExtraction:
 
         result = await extract_canadian_time("next week at 6:45 PM")
         assert result is not None
-        assert result.hour == 0  # 6:45 PM Mountain Time -> 12:45 AM UTC next day
+        # 6:45 PM Mountain Time -> UTC (handles both MDT and MST)
+        # MDT (summer): 6:45 PM + 6 hours = 12:45 AM UTC (hour == 0)
+        # MST (winter): 6:45 PM + 7 hours = 1:45 AM UTC (hour == 1)
+        assert result.hour in [0, 1]  # DST-aware: either 12:45 AM or 1:45 AM UTC
         assert result.minute == 45
 
     @pytest.mark.asyncio
