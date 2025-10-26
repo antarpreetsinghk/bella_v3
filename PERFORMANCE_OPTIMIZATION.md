@@ -378,7 +378,7 @@ This optimization demonstrates:
 **Related Docs:**
 - [Architecture Overview](ARCHITECTURE.md)
 - [Testing Guide](TESTING_GUIDE.md)
-- [API Documentation](http://15.157.56.64:8000/docs)
+- [API Documentation](http://15.157.56.64/docs)
 
 ---
 

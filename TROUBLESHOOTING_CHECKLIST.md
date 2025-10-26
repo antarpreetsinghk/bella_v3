@@ -38,7 +38,7 @@ https://console.twilio.com/us1/monitor/logs/calls
 
 **Step 2: Check if production server is running**
 ```bash
-curl http://15.157.56.64:8000/healthz
+curl http://15.157.56.64/healthz
 ```
 
 **If no response:**
@@ -60,7 +60,7 @@ ssh -i ~/.ssh/bella-voice-app ubuntu@15.157.56.64 "cat ~/bella_v3/.env | grep TW
 
 **Twilio should be configured to call:**
 ```
-http://15.157.56.64:8000/twilio/voice
+http://15.157.56.64/twilio/voice
 ```
 
 **How to verify in Twilio:**
@@ -68,7 +68,7 @@ http://15.157.56.64:8000/twilio/voice
 2. Phone Numbers → Manage → Active numbers
 3. Click your number
 4. Check "Voice & Fax" → "A CALL COMES IN"
-5. Should be: `http://15.157.56.64:8000/twilio/voice`
+5. Should be: `http://15.157.56.64/twilio/voice`
 
 **If wrong URL:**
 - → **Fix:** Update in Twilio console
@@ -345,7 +345,7 @@ docker compose -f docker-compose.cost-optimized.yml restart app
 ## 🔄 Issue: "Server Not Responding"
 
 ### **Symptoms:**
-- Can't access http://15.157.56.64:8000/healthz
+- Can't access http://15.157.56.64/healthz
 - Containers not running
 - Complete system down
 
@@ -520,7 +520,7 @@ docker compose -f docker-compose.cost-optimized.yml up -d --force-recreate
 
 1. **Check health daily:**
 ```bash
-curl http://15.157.56.64:8000/healthz
+curl http://15.157.56.64/healthz
 ```
 
 2. **Monitor disk space weekly:**

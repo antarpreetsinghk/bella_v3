@@ -15,7 +15,7 @@
 ssh -i ~/.ssh/bella-voice-app ubuntu@15.157.56.64 "docker ps"
 
 # Check health endpoint
-curl http://15.157.56.64:8000/healthz
+curl http://15.157.56.64/healthz
 ```
 
 **Expected:** All containers show "healthy" status, health endpoint returns `{"ok":true}`
@@ -292,7 +292,7 @@ docker logs bella-app --since [DATE] --until [DATE] | grep [PHONE_NUMBER]
 ```
 IP: 15.157.56.64
 SSH: ssh -i ~/.ssh/bella-voice-app ubuntu@15.157.56.64
-Health: http://15.157.56.64:8000/healthz
+Health: http://15.157.56.64/healthz
 ```
 
 ### **Key Commands:**

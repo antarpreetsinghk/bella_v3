@@ -275,7 +275,7 @@ ssh -i ~/.ssh/bella-voice-app ubuntu@15.157.56.64 "df -h"
 
 ```bash
 # From your local machine
-curl http://15.157.56.64:8000/healthz
+curl http://15.157.56.64/healthz
 
 # Or from production server
 ssh -i ~/.ssh/bella-voice-app ubuntu@15.157.56.64 "curl -s http://localhost:8000/healthz"
@@ -473,7 +473,7 @@ ssh -i ~/.ssh/bella-voice-app ubuntu@15.157.56.64 "nc -zv localhost 8000"
 # Most useful during testing
 ssh -i ~/.ssh/bella-voice-app ubuntu@15.157.56.64 "docker logs bella-app -f"           # Live logs
 ssh -i ~/.ssh/bella-voice-app ubuntu@15.157.56.64 "docker ps"                          # Container status
-curl http://15.157.56.64:8000/healthz                                                   # Health check
+curl http://15.157.56.64/healthz                                                   # Health check
 
 # Most useful after testing
 ssh -i ~/.ssh/bella-voice-app ubuntu@15.157.56.64 "docker logs bella-app --tail 200 | grep -i error"  # Find errors

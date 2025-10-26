@@ -67,7 +67,7 @@ bash scripts/fix_deployment.sh
 **Next Step (5 minutes):**
 1. Go to https://uptimerobot.com
 2. Create free account
-3. Add monitor: `http://15.157.56.64:8000/healthz`
+3. Add monitor: `http://15.157.56.64/healthz`
 4. Get email alerts when API goes down
 
 ---
@@ -101,10 +101,10 @@ bash scripts/fix_deployment.sh
 
 | Endpoint | URL | Purpose |
 |----------|-----|---------|
-| 📖 API Docs | http://15.157.56.64:8000/docs | Interactive Swagger UI |
-| 📄 ReDoc | http://15.157.56.64:8000/redoc | Alternative documentation |
-| 🏥 Health Check | http://15.157.56.64:8000/healthz | Service status |
-| 🤖 LLM Demo | http://15.157.56.64:8000/llm-demo/status | AI integration showcase |
+| 📖 API Docs | http://15.157.56.64/docs | Interactive Swagger UI |
+| 📄 ReDoc | http://15.157.56.64/redoc | Alternative documentation |
+| 🏥 Health Check | http://15.157.56.64/healthz | Service status |
+| 🤖 LLM Demo | http://15.157.56.64/llm-demo/status | AI integration showcase |
 ```
 
 **Professional touches:**
@@ -153,7 +153,7 @@ bash scripts/fix_deployment.sh
 > balancers, while still maintaining production reliability."
 
 **Show them:**
-- ✅ Live deployment: http://15.157.56.64:8000/docs
+- ✅ Live deployment: http://15.157.56.64/docs
 - ✅ Operations guide: `docs/DEPLOYMENT_STATUS.md`
 - ✅ Monitoring setup: `docs/MONITORING_SETUP.md`
 - ✅ Cost analysis in deployment docs

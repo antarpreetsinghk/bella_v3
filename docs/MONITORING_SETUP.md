@@ -28,7 +28,7 @@ Set up free uptime monitoring to get alerts when your API goes down (and prevent
 ```
 Monitor Type: HTTP(s)
 Friendly Name: Bella API - Health Check
-URL: http://15.157.56.64:8000/healthz
+URL: http://15.157.56.64/healthz
 Monitoring Interval: 5 minutes
 Alert Contacts: Your email
 ```
@@ -37,7 +37,7 @@ Alert Contacts: Your email
 ```
 Monitor Type: HTTP(s)
 Friendly Name: Bella API - Docs
-URL: http://15.157.56.64:8000/docs
+URL: http://15.157.56.64/docs
 Monitoring Interval: 5 minutes
 Alert Contacts: Your email
 ```
@@ -46,7 +46,7 @@ Alert Contacts: Your email
 ```
 Monitor Type: HTTP(s)
 Friendly Name: Bella API - LLM Demo
-URL: http://15.157.56.64:8000/llm-demo/status
+URL: http://15.157.56.64/llm-demo/status
 Monitoring Interval: 5 minutes
 Alert Contacts: Your email
 ```
@@ -127,7 +127,7 @@ docker restart bella-app
 
 **4. Verify Recovery**
 ```bash
-curl http://15.157.56.64:8000/healthz
+curl http://15.157.56.64/healthz
 # Should return: {"ok":true}
 ```
 
@@ -164,7 +164,7 @@ Your application already logs to CloudWatch:
 Add to your crontab for self-monitoring:
 ```bash
 # Add this to crontab (crontab -e)
-*/5 * * * * curl -s http://15.157.56.64:8000/healthz || echo "API Down!" | mail -s "Bella API Alert" your@email.com
+*/5 * * * * curl -s http://15.157.56.64/healthz || echo "API Down!" | mail -s "Bella API Alert" your@email.com
 ```
 
 ---
