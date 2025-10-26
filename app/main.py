@@ -526,6 +526,7 @@ PUBLIC_PREFIXES = (
     "/manage/",     # Admin UI edit/delete forms (Basic Auth + CSRF in home.py)
     "/admin/",      # New professional admin dashboard (username/password auth)
     "/debug/",      # Debug endpoints for production testing
+    "/llm-demo/",   # LLM portfolio showcase (public for recruiters)
 )
 
 def _is_public(path: str) -> bool:

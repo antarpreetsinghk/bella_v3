@@ -1,13 +1,12 @@
 # app/api/routes/llm_demo.py
 """
-LLM Demo Endpoint - Portfolio Showcase
+LLM Demo Endpoint - Portfolio Showcase (Public)
 Demonstrates LLM fallback capability (disabled by default)
+Public endpoints for recruiters to view AI integration architecture
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
-
-from app.api.auth import require_api_key
 from app.services.llm_service import (
     llm_extract_phone,
     llm_extract_time,
@@ -31,11 +30,12 @@ class ExtractionRequest(BaseModel):
 
 
 @router.get("/status")
-async def get_llm_demo_status(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+async def get_llm_demo_status() -> Dict[str, Any]:
     """
-    Get LLM service status - Portfolio showcase endpoint
+    Get LLM service status - Portfolio showcase endpoint (Public)
 
     Shows LLM integration capability even when disabled.
+    Public endpoint for portfolio demonstration.
     """
     status = get_llm_status()
 
@@ -56,13 +56,13 @@ async def get_llm_demo_status(api_key: str = Depends(require_api_key)) -> Dict[s
 
 @router.post("/extract")
 async def test_extraction(
-    request: ExtractionRequest,
-    api_key: str = Depends(require_api_key)
+    request: ExtractionRequest
 ) -> Dict[str, Any]:
     """
-    Demo extraction endpoint - Portfolio showcase
+    Demo extraction endpoint - Portfolio showcase (Public)
 
     Tests extraction with and without LLM fallback to demonstrate capability.
+    Public endpoint for portfolio demonstration.
     """
 
     if not request.speech or len(request.speech.strip()) == 0:
@@ -142,11 +142,12 @@ async def test_extraction(
 
 
 @router.get("/examples")
-async def get_demo_examples(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+async def get_demo_examples() -> Dict[str, Any]:
     """
-    Get example inputs for demo - Portfolio showcase
+    Get example inputs for demo - Portfolio showcase (Public)
 
     Provides test cases that demonstrate LLM fallback value.
+    Public endpoint for portfolio demonstration.
     """
     return {
         "easy_cases": {
@@ -185,11 +186,12 @@ async def get_demo_examples(api_key: str = Depends(require_api_key)) -> Dict[str
 
 
 @router.get("/architecture")
-async def get_architecture_info(api_key: str = Depends(require_api_key)) -> Dict[str, Any]:
+async def get_architecture_info() -> Dict[str, Any]:
     """
-    Get LLM architecture documentation - Portfolio showcase
+    Get LLM architecture documentation - Portfolio showcase (Public)
 
     Explains the fallback architecture for technical interviews.
+    Public endpoint for portfolio demonstration.
     """
     return {
         "extraction_pipeline": {
