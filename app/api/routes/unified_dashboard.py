@@ -25,6 +25,7 @@ from app.services.circuit_breaker import circuit_manager
 from app.services.business_metrics import business_metrics
 from app.services.alerting import alert_manager
 from app.services.cost_optimization import cost_optimizer
+from app.services.llm_service import get_llm_status
 
 # Import cost tracking with fallback
 import sys
@@ -843,10 +844,12 @@ async def get_system_data(api_key: str = Depends(require_api_key)) -> Dict[str, 
     """Get system/performance data for Tab 3"""
     perf_summary = performance_monitor.get_performance_summary()
     cache_stats = performance_cache.stats()
+    llm_status = get_llm_status()
 
     return {
         "performance": perf_summary,
         "cache": cache_stats,
+        "llm_fallback": llm_status,
         "status": "healthy" if perf_summary.get('avg_response_time', 0) < 1.0 else "degraded"
     }
 

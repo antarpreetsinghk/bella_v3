@@ -16,6 +16,8 @@
 
 [🔗 Live API Documentation](http://15.157.56.64:8000/docs) • [📊 Performance Optimization](PERFORMANCE_OPTIMIZATION.md) • [🏗️ Architecture Guide](CLAUDE.md)
 
+> 🏗️ **Live Infrastructure:** Deployed on AWS EC2 (ARM64 Graviton2 cost-optimized instance). Full CI/CD pipeline via GitHub Actions with automated testing, security scanning, and deployment. [Architecture details →](CLAUDE.md)
+
 </div>
 
 ---
@@ -273,16 +275,28 @@ async def test_complete_booking_flow():
 
 ## 📖 **Explore the Project**
 
-### **🔗 Live Resources**
-- **API Documentation:** http://15.157.56.64:8000/docs (Interactive Swagger UI)
-- **Alternative Docs:** http://15.157.56.64:8000/redoc (ReDoc view)
-- **Health Check:** http://15.157.56.64:8000/healthz (Production status)
+### **🚀 Live Deployment**
+
+**Production API:** http://15.157.56.64:8000/docs *(AWS EC2 ARM64 Graviton2)*
+
+| Endpoint | URL | Purpose |
+|----------|-----|---------|
+| **📖 API Docs** | http://15.157.56.64:8000/docs | Interactive Swagger UI |
+| **📄 ReDoc** | http://15.157.56.64:8000/redoc | Alternative documentation |
+| **🏥 Health Check** | http://15.157.56.64:8000/healthz | Service status |
+| **🤖 LLM Demo** | http://15.157.56.64:8000/llm-demo/status | AI integration showcase |
+| **📊 Metrics** | http://15.157.56.64:8000/metrics | Performance metrics |
+
+**Infrastructure:** Cost-optimized deployment (~$13/month) with auto-restart policies and health monitoring.
+**CI/CD:** Fully automated deployment via GitHub Actions with security scanning and testing.
+**Details:** [Deployment Status Guide](docs/DEPLOYMENT_STATUS.md) • [Monitoring Setup](docs/MONITORING_SETUP.md)
 
 ### **📚 Documentation**
 - [Performance Optimization Case Study](PERFORMANCE_OPTIMIZATION.md) - 200x speed improvement story
 - [Architecture & Claude Code Guide](CLAUDE.md) - Complete technical overview
 - [Security Framework](SECURITY.md) - Enterprise security implementation
-- [API Documentation](http://15.157.56.64:8000/docs) - OpenAPI/Swagger interactive docs
+- [Deployment & Operations](docs/DEPLOYMENT_STATUS.md) - Production deployment details
+- [Monitoring Setup](docs/MONITORING_SETUP.md) - Uptime monitoring guide
 
 ---
 

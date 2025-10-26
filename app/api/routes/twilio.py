@@ -32,6 +32,14 @@ from app.services.canadian_extraction import (
 # Red Deer accent-aware processing
 from app.services.accent_recognition import accent_processor
 
+# LLM fallback service (optional, disabled by default)
+from app.services.llm_service import (
+    llm_extract_phone,
+    llm_extract_time,
+    llm_extract_name,
+    is_llm_fallback_enabled
+)
+
 from app.db.session import get_session
 from app.services.redis_session import get_session as get_call_session, reset_session, save_session, get_redis_client
 from app.services.simple_extraction import (
@@ -383,6 +391,11 @@ async def voice_collect(
                             if not extracted_name:
                                 # Fallback to simple extraction
                                 extracted_name = extract_name_simple(speech)
+                            if not extracted_name and is_llm_fallback_enabled():
+                                # LLM fallback (only if enabled and libraries failed)
+                                extracted_name = await extract_canadian_name(speech, llm_fallback=llm_extract_name)
+                                if extracted_name:
+                                    logger.info("[llm_fallback] LLM successfully extracted name")
                             extracted_info["name"] = extracted_name if extracted_name else None
 
                 elif sess.step == "ask_mobile":
@@ -398,6 +411,11 @@ async def voice_collect(
                         if not extracted_phone:
                             # Fallback to simple extraction
                             extracted_phone = extract_phone_simple(speech)
+                        if not extracted_phone and is_llm_fallback_enabled():
+                            # LLM fallback (only if enabled and libraries failed)
+                            extracted_phone = await extract_canadian_phone(speech, llm_fallback=llm_extract_phone)
+                            if extracted_phone:
+                                logger.info("[llm_fallback] LLM successfully extracted phone")
                         extracted_info["mobile"] = extracted_phone
 
                 elif sess.step == "ask_time":
@@ -644,10 +662,15 @@ async def voice_collect(
                 # Try Canadian time extraction first but with timeout
                 if not time_timer.should_timeout():
                     starts_at_utc = await with_timeout(
-                        extract_canadian_time(speech),
+                        extract_canadian_time(
+                            speech,
+                            llm_fallback=llm_extract_time if is_llm_fallback_enabled() else None
+                        ),
                         timeout_seconds=1.5,
                         default_value=None
                     )
+                    if starts_at_utc and is_llm_fallback_enabled():
+                        logger.info("[llm_fallback] LLM successfully extracted time")
 
                 # Fast fallback: simple time parsing
                 if not starts_at_utc and not time_timer.should_timeout():

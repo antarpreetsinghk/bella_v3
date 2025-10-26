@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     REQUEST_MAX_TOKENS: int = 4000
     RESPONSE_MAX_TOKENS: int = 512
 
+    # --- LLM Fallback Configuration ---
+    ENABLE_LLM_FALLBACK: bool = False  # Disabled by default for cost optimization
+    LLM_FALLBACK_TIMEOUT: int = 10      # Timeout for LLM API calls in seconds
+
     # --- Security ---
     BELLA_API_KEY: str | None = None
     ADMIN_USER: str | None = None

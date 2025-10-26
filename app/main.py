@@ -52,6 +52,7 @@ from app.api.routes.assistant import router as assistant_router
 from app.api.routes.twilio import router as twilio_router
 from app.api.routes.unified_dashboard import router as unified_router
 from app.api.routes.admin_dashboard import router as admin_router
+from app.api.routes.llm_demo import router as llm_demo_router  # LLM portfolio showcase
 # Deprecated dashboards - will be removed
 from app.api.routes.home import router as home_router  # OLD: Basic Auth dashboard
 from app.api.routes.dashboard import router as dashboard_router  # OLD: Cost-only dashboard
@@ -694,6 +695,7 @@ app.include_router(users_router)
 app.include_router(appointments_router)
 app.include_router(assistant_router)
 app.include_router(twilio_router)
+app.include_router(llm_demo_router)  # LLM portfolio showcase endpoint
 
 # OLD: Deprecated dashboards - keeping temporarily for migration
 app.include_router(home_router, prefix="/old")  # Moved to /old/
