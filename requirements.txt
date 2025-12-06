@@ -11,7 +11,7 @@ pydantic==2.11.7
 pydantic-core==2.33.2
 pydantic-settings==2.10.1
 httpx==0.28.1
-urllib3==2.5.0  # Security fix for GHSA-pq67-6m6q-mj2v
+urllib3==2.6.0  # Security fix for GHSA-pq67-6m6q-mj2v
 alembic==1.16.4
 itsdangerous==2.2.0
 python-dotenv==1.1.1
