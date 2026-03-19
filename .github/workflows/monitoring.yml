@@ -1,22 +1,22 @@
 name: Cost Monitoring & Performance
 
-on:
-  schedule:
-    # Run daily at 9 AM UTC (daily cost check)
-    - cron: '0 9 * * *'
-    # Run every 6 hours (performance monitoring)
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
-    inputs:
-      check_type:
-        description: 'Type of check to run'
-        required: true
-        default: 'both'
-        type: choice
-        options:
-        - both
-        - cost
-        - performance
+# on:
+#   schedule:
+#     # Run daily at 9 AM UTC (daily cost check)
+#     - cron: '0 9 * * *'
+#     # Run every 6 hours (performance monitoring)
+#     - cron: '0 */6 * * *'
+#   workflow_dispatch:
+#     inputs:
+#       check_type:
+#         description: 'Type of check to run'
+#         required: true
+#         default: 'both'
+#         type: choice
+#         options:
+#         - both
+#         - cost
+#         - performance
 
 env:
   EC2_HOST: ${{ secrets.EC2_HOST }}
